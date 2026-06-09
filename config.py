@@ -5,7 +5,7 @@ Update SPREADSHEET_NAME and CREDENTIALS_FILE for your environment.
 import os
 
 # Google Sheets configuration
-SPREADSHEET_NAME = "YOUR_SPREADSHEET_NAME_HERE"
+SPREADSHEET_NAME = "Journal - Priceline Pharmacy Pacific Fair (Jason)"
 CREDENTIALS_FILE = os.path.expanduser("~/.pharmacy-dashboard/credentials.json")
 
 # Year tab names in the spreadsheet
