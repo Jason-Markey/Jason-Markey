@@ -37,7 +37,7 @@ SCOPES = [
 ]
 
 
-def connect_to_google_sheets(credentials_path: str | None = None) -> gspread.Client:
+def connect_to_google_sheets(credentials_path=None) -> gspread.Client:
     """Return an authorised gspread client."""
     creds_path = credentials_path or config.CREDENTIALS_FILE
     credentials = Credentials.from_service_account_file(creds_path, scopes=SCOPES)
@@ -50,7 +50,7 @@ def connect_to_google_sheets(credentials_path: str | None = None) -> gspread.Cli
 _DATE_RE = re.compile(r"(\d{2}/\d{2}/\d{4})")
 
 
-def _parse_date(raw: str) -> date | None:
+def _parse_date(raw: str):
     """Extract a date from strings like '07/07/2025  Monday'."""
     if not raw:
         return None
@@ -63,7 +63,7 @@ def _parse_date(raw: str) -> date | None:
         return None
 
 
-def _to_float(val) -> float | None:
+def _to_float(val):
     """Convert a cell value to float, stripping $ and commas."""
     if val is None or val == "":
         return None
@@ -121,8 +121,8 @@ def load_year_data(
 # ---------------------------------------------------------------------------
 def load_all_years(
     client: gspread.Client,
-    spreadsheet_name: str | None = None,
-) -> dict[str, pd.DataFrame]:
+    spreadsheet_name=None,
+) -> dict:
     """Return a dict of DataFrames keyed by financial year label."""
     ss_name = spreadsheet_name or config.SPREADSHEET_NAME
     result = {}
@@ -149,7 +149,7 @@ def get_current_fy() -> str:
     return f"{start_year % 100:02d}/{end_year % 100:02d}"
 
 
-def get_prior_fy(fy_label: str, n: int = 1) -> str | None:
+def get_prior_fy(fy_label: str, n: int = 1):
     """Return the FY label n years before the given one, or None."""
     parts = fy_label.split("/")
     start = int(parts[0])
@@ -174,7 +174,7 @@ def get_fy_month(d: date) -> int:
 # Get metric data across years
 # ---------------------------------------------------------------------------
 def get_metric_data(
-    all_data: dict[str, pd.DataFrame],
+    all_data: dict,
     metric_key: str,
 ) -> pd.DataFrame:
     """Combine metric values from all years into one DataFrame."""
@@ -197,7 +197,7 @@ def get_metric_data(
 # ---------------------------------------------------------------------------
 # Cached data loader (called from app callbacks)
 # ---------------------------------------------------------------------------
-def get_all_data(force_refresh: bool = False) -> dict[str, pd.DataFrame] | None:
+def get_all_data(force_refresh: bool = False):
     """Return cached data, refreshing if stale. Returns None on error."""
     if not force_refresh and _cache_is_fresh():
         return _cache["data"]

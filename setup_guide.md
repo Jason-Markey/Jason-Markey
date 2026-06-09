@@ -1,3 +1,17 @@
+# Returning Tonight — Continue From Here
+
+You have already completed Steps 1, 2, and 3. Your next step is **Step 4**.
+
+Before continuing, make sure you have the latest code. Open Command Prompt and run:
+```
+cd Documents\pharmacy-dashboard
+git pull
+```
+
+Then continue with Step 4 below.
+
+---
+
 # Pharmacy POS Dashboard — Setup Guide
 
 Follow these steps in order. The whole process takes about 15-20 minutes.

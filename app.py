@@ -3,6 +3,7 @@ Pharmacy POS Dashboard — main application.
 Run with: python app.py
 Then open http://localhost:8050 in your browser.
 """
+import platform
 from datetime import date
 
 import dash
@@ -26,6 +27,14 @@ server = app.server  # for gunicorn if needed
 # ---------------------------------------------------------------------------
 # Formatting helpers
 # ---------------------------------------------------------------------------
+def fmt_date(d):
+    """Format a date cross-platform (no leading zero on day)."""
+    if not hasattr(d, "strftime"):
+        return str(d)
+    fmt = "%#d/%m/%Y" if platform.system() == "Windows" else "%-d/%m/%Y"
+    return d.strftime(fmt)
+
+
 def fmt_value(val, fmt: str) -> str:
     if val is None or (isinstance(val, float) and pd.isna(val)):
         return "—"
@@ -40,7 +49,7 @@ def fmt_value(val, fmt: str) -> str:
     return str(val)
 
 
-def fmt_diff(val, fmt: str) -> tuple[str, bool]:
+def fmt_diff(val, fmt: str):
     """Return (formatted string with arrow, is_positive)."""
     if val is None or (isinstance(val, float) and pd.isna(val)):
         return "—", True
@@ -77,7 +86,7 @@ def aggregate_monthly(df: pd.DataFrame, agg: str) -> pd.Series:
     return grouped.sum()
 
 
-def get_ytd(df: pd.DataFrame, agg: str, current_fy: str) -> float | None:
+def get_ytd(df: pd.DataFrame, agg: str, current_fy: str):
     sub = df[df["fy_year"] == current_fy]
     if sub.empty:
         return None
@@ -86,7 +95,7 @@ def get_ytd(df: pd.DataFrame, agg: str, current_fy: str) -> float | None:
     return sub["value"].sum()
 
 
-def get_ytd_to_month(df: pd.DataFrame, agg: str, fy: str, max_month: int) -> float | None:
+def get_ytd_to_month(df: pd.DataFrame, agg: str, fy: str, max_month: int):
     """YTD for a prior year capped at the same FY month as current year."""
     sub = df[(df["fy_year"] == fy) & (df["fy_month"] <= max_month)]
     if sub.empty:
@@ -238,7 +247,7 @@ def build_main_content(metric_name: str, all_data: dict):
     # ── Last 10 days ──────────────────────────────────────────────────────
     cy_df = metric_df[metric_df["fy_year"] == current_fy].sort_values("date", ascending=False)
     last10 = cy_df.head(10)[["date", "value"]].copy()
-    last10["date_str"] = last10["date"].apply(lambda d: d.strftime("%-d/%m/%Y") if hasattr(d, "strftime") else str(d))
+    last10["date_str"] = last10["date"].apply(fmt_date)
     last10["value_str"] = last10["value"].apply(lambda v: fmt_value(v, fmt))
 
     # ── Monthly aggregates ────────────────────────────────────────────────
@@ -547,7 +556,7 @@ def update_dashboard(metric_name, _n):
     cy_df = all_data.get(current_fy, pd.DataFrame())
     if not cy_df.empty and "date" in cy_df.columns:
         most_recent = cy_df["date"].max()
-        date_str = most_recent.strftime("%-d/%m/%Y") if hasattr(most_recent, "strftime") else str(most_recent)
+        date_str = fmt_date(most_recent)
     else:
         date_str = "No data"
 
