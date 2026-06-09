@@ -6,7 +6,7 @@ import os
 
 # Google Sheets configuration
 SPREADSHEET_NAME = "Journal - Priceline Pharmacy Pacific Fair (Jason)"
-CREDENTIALS_FILE = os.path.expanduser("~/.pharmacy-dashboard/credentials.json")
+CREDENTIALS_FILE = os.path.join(os.path.expanduser("~"), ".pharmacy-dashboard", "credentials.json")
 
 # Year tab names in the spreadsheet
 SHEET_NAMES = {
