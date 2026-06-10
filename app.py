@@ -200,7 +200,11 @@ app.layout = html.Div(
                 options=DROPDOWN_OPTIONS,
                 value="Daily Sales",
                 clearable=False,
-                style={"width": "320px"},
+                style={
+                    "width": "320px",
+                    "color": "#000000",
+                    "backgroundColor": "#ffffff",
+                },
                 className="metric-dropdown",
             ),
         ], style={"marginBottom": "24px"}),
