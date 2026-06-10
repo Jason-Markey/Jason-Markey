@@ -904,24 +904,6 @@ def build_trends(metric_name: str, all_data: dict):
             annotation_font=dict(color=config.COLORS["positive"], size=11),
         )
 
-    # Anomalies: days more than 30% below the average of the prior 8 same weekdays
-    anom_x, anom_y = [], []
-    work = metric_df[metric_df["date"] >= cutoff].sort_values("date").copy()
-    work["weekday"] = work["date"].apply(lambda d: d.weekday())
-    for _, grp in work.groupby("weekday"):
-        baseline = grp["value"].rolling(8, min_periods=4).mean().shift(1)
-        flags = grp["value"] < baseline * 0.7
-        for (_, row), flag in zip(grp.iterrows(), flags):
-            if flag:
-                anom_x.append(row["date"])
-                anom_y.append(row["value"])
-    if anom_x:
-        fig.add_trace(go.Scatter(
-            x=anom_x, y=anom_y, mode="markers", name="Unusually quiet day",
-            marker=dict(size=9, color=config.COLORS["negative"],
-                        symbol="circle-open", line=dict(width=2)),
-        ))
-
     # ── Scripts vs Front Shop correlation (only shown once, on Trends tab) ──
     scripts_df = data_module.get_metric_data(all_data, "script_nos")
     sales_df = data_module.get_metric_data(all_data, "tax_sales")
@@ -995,11 +977,6 @@ def build_trends(metric_name: str, all_data: dict):
     return html.Div([
         card([
             dcc.Graph(figure=fig, config=GRAPH_CONFIG, style={"height": "380px"}),
-            html.Div(
-                "Dotted vertical lines are QLD public holidays. Red circles flag days more than "
-                "20% below the recent average for that weekday.",
-                style={"fontSize": "12px", "color": config.COLORS["text_muted"], "marginTop": "8px"},
-            ),
         ], style={"marginBottom": "24px"}),
     ] + corr_section + mix_section)
 
