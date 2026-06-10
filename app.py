@@ -90,8 +90,10 @@ def fmt_diff(val, fmt: str):
     arrow = "▲" if positive else "▼"
     if fmt == "currency":
         return f"{arrow} ${abs(val):,.0f}", positive
-    if fmt in ("number", "number_2dp"):
+    if fmt == "number":
         return f"{arrow} {abs(val):,.0f}", positive
+    if fmt == "number_2dp":
+        return f"{arrow} {abs(val):,.2f}", positive
     if fmt == "percentage":
         return f"{arrow} {abs(val):.1f}pp", positive
     return f"{arrow} {val:,.2f}", positive
