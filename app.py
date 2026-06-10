@@ -201,7 +201,18 @@ app.layout = html.Div(
                 value="Daily Sales",
                 clearable=False,
                 style={"width": "320px"},
+                className="metric-dropdown",
             ),
+            html.Style("""
+                .metric-dropdown .Select-value-label { color: #ffffff !important; }
+                .metric-dropdown .Select-control { background-color: #16213e !important; border-color: #0f3460 !important; }
+                .metric-dropdown .Select-menu-outer { background-color: #16213e !important; border-color: #0f3460 !important; }
+                .metric-dropdown .Select-option { background-color: #16213e !important; color: #ffffff !important; }
+                .metric-dropdown .Select-option:hover { background-color: #0f3460 !important; }
+                .metric-dropdown .Select-placeholder { color: #a0a0b8 !important; }
+                .metric-dropdown input { color: #ffffff !important; }
+                .metric-dropdown .Select-arrow { border-top-color: #a0a0b8 !important; }
+            """),
         ], style={"marginBottom": "24px"}),
 
         # ── Main content (hidden until data loads) ───────────────────────────
@@ -431,9 +442,8 @@ def build_main_content(metric_name: str, all_data: dict):
 
     # ── Assemble layout ───────────────────────────────────────────────────
     return html.Div([
-        # YTD card + Last 10 days
+        # YTD card
         html.Div([
-            # YTD card
             card([
                 html.Div(metric_name, style={
                     "fontSize": "13px", "color": config.COLORS["text_muted"],
@@ -477,42 +487,9 @@ def build_main_content(metric_name: str, all_data: dict):
                         "color": config.COLORS["positive"] if pct_2yr_pos else config.COLORS["negative"],
                     }),
                 ]),
-            ], style={"flex": "0 0 300px", "marginRight": "20px"}),
+            ], style={"flex": "0 0 300px"}),
 
-            # Last 10 days table
-            card([
-                html.Div("Last 10 Days", style={
-                    "fontSize": "13px", "color": config.COLORS["text_muted"],
-                    "marginBottom": "12px", "fontWeight": "600",
-                    "textTransform": "uppercase", "letterSpacing": "1px",
-                }),
-                html.Table([
-                    html.Thead(html.Tr([
-                        html.Th("Date", style={"padding": "4px 12px", "textAlign": "left",
-                                               "color": config.COLORS["text_muted"], "fontSize": "12px"}),
-                        html.Th(metric_name, style={"padding": "4px 12px", "textAlign": "right",
-                                                     "color": config.COLORS["text_muted"], "fontSize": "12px"}),
-                    ])),
-                    html.Tbody([
-                        html.Tr([
-                            html.Td(row["date_str"], style={
-                                "padding": "5px 12px", "fontSize": "13px",
-                                "color": config.COLORS["text"],
-                            }),
-                            html.Td(row["value_str"], style={
-                                "padding": "5px 12px", "textAlign": "right",
-                                "fontSize": "13px", "color": config.COLORS["text"],
-                                "fontWeight": "500",
-                            }),
-                        ], style={
-                            "backgroundColor": config.COLORS["table_row_alt"] if i % 2 == 0 else "transparent",
-                        })
-                        for i, (_, row) in enumerate(last10.iterrows())
-                    ]),
-                ], style={"width": "100%", "borderCollapse": "collapse"}),
-            ], style={"flex": "1"}),
-
-        ], style={"display": "flex", "marginBottom": "24px", "alignItems": "flex-start"}),
+        ], style={"display": "flex", "marginBottom": "24px"}),
 
         # Line chart
         card([
@@ -532,6 +509,39 @@ def build_main_content(metric_name: str, all_data: dict):
                     style={"width": "100%", "borderCollapse": "collapse"},
                 ),
             ], style={"overflowX": "auto"}),
+        ], style={"marginBottom": "24px"}),
+
+        # Last 10 days table
+        card([
+            html.Div("Last 10 Days", style={
+                "fontSize": "13px", "color": config.COLORS["text_muted"],
+                "marginBottom": "12px", "fontWeight": "600",
+                "textTransform": "uppercase", "letterSpacing": "1px",
+            }),
+            html.Table([
+                html.Thead(html.Tr([
+                    html.Th("Date", style={"padding": "4px 12px", "textAlign": "left",
+                                           "color": config.COLORS["text_muted"], "fontSize": "12px"}),
+                    html.Th(metric_name, style={"padding": "4px 12px", "textAlign": "right",
+                                                 "color": config.COLORS["text_muted"], "fontSize": "12px"}),
+                ])),
+                html.Tbody([
+                    html.Tr([
+                        html.Td(row["date_str"], style={
+                            "padding": "5px 12px", "fontSize": "13px",
+                            "color": config.COLORS["text"],
+                        }),
+                        html.Td(row["value_str"], style={
+                            "padding": "5px 12px", "textAlign": "right",
+                            "fontSize": "13px", "color": config.COLORS["text"],
+                            "fontWeight": "500",
+                        }),
+                    ], style={
+                        "backgroundColor": config.COLORS["table_row_alt"] if i % 2 == 0 else "transparent",
+                    })
+                    for i, (_, row) in enumerate(last10.iterrows())
+                ]),
+            ], style={"width": "100%", "borderCollapse": "collapse"}),
         ]),
     ])
 
