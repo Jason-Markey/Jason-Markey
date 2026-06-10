@@ -140,8 +140,13 @@ def send_email(html, subject):
         },
         method="POST",
     )
-    with urllib.request.urlopen(req) as resp:
-        print(f"Email sent ({resp.status}): {subject}")
+    try:
+        with urllib.request.urlopen(req) as resp:
+            print(f"Email sent ({resp.status}): {subject}")
+    except urllib.error.HTTPError as e:
+        body = e.read().decode(errors="replace")
+        print(f"Resend API error {e.code}: {body}")
+        sys.exit(1)
 
 
 def main():
