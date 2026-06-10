@@ -1206,15 +1206,6 @@ def build_month_detail(metric_name: str, all_data: dict, month_value: str):
     dark_chart_layout(fig, title=f"{metric_name} — {month_label} {year} by day")
     fig.update_xaxes(dtick=1, title_text="Day of month")
 
-    # Mark public holidays falling in this month (current year shown)
-    for d, name in holidays.qld_holidays(year).items():
-        if d.month == cal_month:
-            fig.add_vline(x=d.day, line=dict(color=config.COLORS["accent_light"],
-                                             width=1, dash="dot"))
-            fig.add_annotation(x=d.day, y=1, yref="paper", yanchor="bottom",
-                               text=name, showarrow=False, textangle=-38,
-                               font=dict(size=9, color=config.COLORS["text_muted"]))
-
     # ── Cumulative chart (sum metrics only) ─────────────────────────────
     cumulative_card = []
     if agg == "sum":
