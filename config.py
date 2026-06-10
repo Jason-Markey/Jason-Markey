@@ -62,6 +62,18 @@ METRICS = {
         "format": "currency",
         "aggregation": "sum",
     },
+    "Front Shop Sales": {
+        "key": "tax_sales",
+        "source": "front_shop",
+        "format": "currency",
+        "aggregation": "sum",
+    },
+    "Dispensary Sales": {
+        "key": "non_tax_sales",
+        "source": "front_shop",
+        "format": "currency",
+        "aggregation": "sum",
+    },
     "Average Sale": {
         "key": "ave_sale",
         "source": "calculated",
