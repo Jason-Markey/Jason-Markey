@@ -1,4 +1,71 @@
-/* Ensure dropdown selected value is visible (black text on white background) */
+/* ── Dropdown: black text on white so selection is always readable ── */
 .metric-dropdown .Select-value-label { color: #000000 !important; }
 .metric-dropdown .Select--single > .Select-control .Select-value { color: #000000 !important; }
 .metric-dropdown .Select-single-value { color: #000000 !important; }
+
+/* ── Card polish: subtle shadow + lift on hover ── */
+.dash-card {
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.35);
+    transition: box-shadow 0.2s ease, transform 0.2s ease;
+}
+.dash-card:hover {
+    box-shadow: 0 6px 18px rgba(0, 0, 0, 0.5);
+}
+
+/* ── Buttons ── */
+button {
+    transition: filter 0.15s ease, transform 0.1s ease;
+}
+button:hover {
+    filter: brightness(1.25);
+}
+button:active {
+    transform: scale(0.97);
+}
+
+/* ── Tabs: smooth hover ── */
+.tab {
+    transition: background-color 0.15s ease;
+}
+.tab:hover {
+    filter: brightness(1.2);
+}
+
+/* ── Dark scrollbars ── */
+::-webkit-scrollbar { width: 10px; height: 10px; }
+::-webkit-scrollbar-track { background: #1a1a2e; }
+::-webkit-scrollbar-thumb { background: #0f3460; border-radius: 5px; }
+::-webkit-scrollbar-thumb:hover { background: #533483; }
+
+/* ── Date range picker: keep it readable (white widget, dark page) ── */
+.range-picker .DateInput_input {
+    font-size: 14px;
+    padding: 6px 8px;
+}
+
+/* ── Print: white background, hide controls, show only the report ── */
+@media print {
+    body, body > div {
+        background-color: #ffffff !important;
+    }
+    /* Hide everything except the report table */
+    button, .metric-dropdown, #range-container, #report-container,
+    .tab-container, #main-tabs, h1, #last-data-date, #last-refresh-time {
+        display: none !important;
+    }
+    #report-printable .dash-card {
+        background-color: #ffffff !important;
+        border: none !important;
+        box-shadow: none !important;
+    }
+    #report-printable h2,
+    #report-printable td,
+    #report-printable th {
+        color: #000000 !important;
+        background-color: #ffffff !important;
+        border-color: #cccccc !important;
+    }
+    /* Keep the green/red change colours but darker for paper */
+    #report-printable td[style*="rgb(0, 230, 118)"] { color: #1a7d3c !important; }
+    #report-printable td[style*="rgb(255, 82, 82)"] { color: #b00020 !important; }
+}

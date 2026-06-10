@@ -154,12 +154,12 @@ def card(children, style=None):
     base = {
         "backgroundColor": config.COLORS["card"],
         "border": f"1px solid {config.COLORS['card_border']}",
-        "borderRadius": "8px",
+        "borderRadius": "10px",
         "padding": "20px",
     }
     if style:
         base.update(style)
-    return html.Div(children, style=base)
+    return html.Div(children, style=base, className="dash-card")
 
 
 def comparison_line(label, diff_str, diff_pos, pct_str, pct_pos):
@@ -305,6 +305,10 @@ app.layout = html.Div(
                         style=TAB_STYLE, selected_style=TAB_SELECTED_STYLE),
                 dcc.Tab(label="Day of Week", value="tab-dow",
                         style=TAB_STYLE, selected_style=TAB_SELECTED_STYLE),
+                dcc.Tab(label="Custom Range", value="tab-range",
+                        style=TAB_STYLE, selected_style=TAB_SELECTED_STYLE),
+                dcc.Tab(label="Monthly Report", value="tab-report",
+                        style=TAB_STYLE, selected_style=TAB_SELECTED_STYLE),
             ],
             style={"marginBottom": "20px"},
         ),
@@ -329,7 +333,49 @@ app.layout = html.Div(
             ),
         ], id="dropdown-container", style={"marginBottom": "24px"}),
 
+        # ── Custom range picker (Custom Range tab only) ───────────────────
+        html.Div([
+            html.Label("Date Range", style={"color": config.COLORS["text_muted"],
+                                            "fontSize": "13px", "marginBottom": "6px",
+                                            "display": "block"}),
+            dcc.DatePickerRange(
+                id="date-range-picker",
+                display_format="D/M/YYYY",
+                start_date=(date.today() - timedelta(days=28)),
+                end_date=date.today(),
+                className="range-picker",
+            ),
+        ], id="range-container", style={"display": "none"}),
+
+        # ── Report month picker (Monthly Report tab only) ─────────────────
+        html.Div([
+            html.Div([
+                html.Label("Report Month", style={"color": config.COLORS["text_muted"],
+                                                  "fontSize": "13px", "marginBottom": "6px",
+                                                  "display": "block"}),
+                dcc.Dropdown(
+                    id="report-month-dropdown",
+                    clearable=False,
+                    style={"width": "240px", "maxWidth": "100%",
+                           "color": "#000000", "backgroundColor": "#ffffff"},
+                    className="metric-dropdown",
+                ),
+            ]),
+            html.Button("Print / Save as PDF", id="print-button", n_clicks=0, style={
+                "backgroundColor": config.COLORS["accent_light"],
+                "color": config.COLORS["text"],
+                "border": "none",
+                "borderRadius": "6px",
+                "padding": "10px 20px",
+                "cursor": "pointer",
+                "fontSize": "13px",
+                "fontWeight": "600",
+                "alignSelf": "flex-end",
+            }),
+        ], id="report-container", style={"display": "none"}),
+
         html.Div(id="main-content"),
+        html.Div(id="print-dummy", style={"display": "none"}),
     ],
 )
 
@@ -836,6 +882,203 @@ def build_dow(metric_name: str, all_data: dict):
 
 
 # ---------------------------------------------------------------------------
+# Custom Range tab
+# ---------------------------------------------------------------------------
+def _shift_year(d, years):
+    try:
+        return d.replace(year=d.year - years)
+    except ValueError:  # Feb 29
+        return d.replace(year=d.year - years, day=28)
+
+
+def build_range(metric_name: str, all_data: dict, start, end):
+    meta = config.METRICS[metric_name]
+    key = meta["key"]
+    fmt = meta["format"]
+    agg = meta["aggregation"]
+
+    if isinstance(start, str):
+        start = date.fromisoformat(start[:10])
+    if isinstance(end, str):
+        end = date.fromisoformat(end[:10])
+
+    metric_df = data_module.get_metric_data(all_data, key)
+    if metric_df.empty:
+        return html.Div("No data available.", style={"color": config.COLORS["text_muted"]})
+
+    def range_value(s, e):
+        sub = metric_df[(metric_df["date"] >= s) & (metric_df["date"] <= e)]
+        if sub.empty:
+            return None, sub
+        if agg == "average":
+            return sub["value"].mean(), sub
+        return sub["value"].sum(), sub
+
+    val_cy, sub_cy = range_value(start, end)
+    py_start, py_end = _shift_year(start, 1), _shift_year(end, 1)
+    val_py, sub_py = range_value(py_start, py_end)
+
+    diff = (val_cy - val_py) if (val_cy is not None and val_py is not None) else None
+    pct = (diff / val_py * 100) if (diff is not None and val_py and val_py != 0) else None
+    diff_str, diff_pos = fmt_diff(diff, fmt)
+    pct_str, pct_pos = fmt_pct(pct)
+
+    # Daily chart for the selected range, with the same range last year overlaid
+    fig = go.Figure()
+    if not sub_cy.empty:
+        s = sub_cy.sort_values("date")
+        fig.add_trace(go.Scatter(
+            x=list(s["date"]), y=list(s["value"]),
+            mode="lines+markers", name="Selected range",
+            line=dict(color=config.COLORS["line_cy"], width=2.5), marker=dict(size=5),
+        ))
+    if not sub_py.empty:
+        p = sub_py.sort_values("date").copy()
+        # shift PY dates forward a year so the lines overlap on the same axis
+        p["date_aligned"] = p["date"].apply(lambda d: _shift_year(d, -1))
+        fig.add_trace(go.Scatter(
+            x=list(p["date_aligned"]), y=list(p["value"]),
+            mode="lines+markers", name="Same dates last year",
+            line=dict(color=config.COLORS["line_py"], width=2, dash="dot"), marker=dict(size=4),
+        ))
+    dark_chart_layout(fig, title=f"{metric_name} — {fmt_date(start)} to {fmt_date(end)}")
+
+    label = "Average" if agg == "average" else "Total"
+    return html.Div([
+        html.Div([
+            card([
+                html.Div(f"{label} for selected range", style={
+                    "fontSize": "13px", "color": config.COLORS["text_muted"], "marginBottom": "8px",
+                }),
+                html.Div(fmt_value(val_cy, fmt), style={
+                    "fontSize": "32px", "fontWeight": "700",
+                    "color": config.COLORS["text"], "marginBottom": "12px",
+                }),
+                html.Hr(style={"borderColor": config.COLORS["card_border"], "margin": "12px 0"}),
+                comparison_line(
+                    f"vs {fmt_date(py_start)}–{fmt_date(py_end)}",
+                    diff_str, diff_pos, pct_str, pct_pos,
+                ),
+                html.Div(f"Last year: {fmt_value(val_py, fmt)}", style={
+                    "fontSize": "13px", "color": config.COLORS["text_muted"],
+                }),
+            ], style={"flex": "1 1 300px", "minWidth": "280px"}),
+        ], style={"display": "flex", "flexWrap": "wrap", "gap": "20px", "marginBottom": "24px"}),
+        card([
+            dcc.Graph(figure=fig, config=GRAPH_CONFIG, style={"height": "380px"}),
+        ]),
+    ])
+
+
+# ---------------------------------------------------------------------------
+# Monthly Report tab
+# ---------------------------------------------------------------------------
+def get_report_month_options(all_data: dict):
+    """All (FY, fy_month) pairs that have data, newest first, as dropdown options."""
+    seen = set()
+    for fy, df in all_data.items():
+        if df.empty:
+            continue
+        for _, row in df[["fy_year", "fy_month"]].drop_duplicates().iterrows():
+            seen.add((row["fy_year"], int(row["fy_month"])))
+
+    def sort_key(item):
+        fy, m = item
+        return (int(fy.split("/")[0]), m)
+
+    options = []
+    for fy, m in sorted(seen, key=sort_key, reverse=True):
+        cal_month = (m + config.FY_START_MONTH - 2) % 12 + 1
+        start_yy = int(fy.split("/")[0])
+        year = 2000 + start_yy + (0 if m <= (12 - config.FY_START_MONTH + 1) else 1)
+        label = f"{MONTH_LABELS[m - 1]} {year}"
+        options.append({"label": label, "value": f"{fy}|{m}"})
+    return options
+
+
+def build_report(all_data: dict, report_value: str):
+    if not report_value:
+        return html.Div("Select a month.", style={"color": config.COLORS["text_muted"]})
+
+    fy, m = report_value.split("|")
+    m = int(m)
+    prior_fy = data_module.get_prior_fy(fy, 1)
+
+    month_label = MONTH_LABELS[m - 1]
+    start_yy = int(fy.split("/")[0])
+    year = 2000 + start_yy + (0 if m <= (12 - config.FY_START_MONTH + 1) else 1)
+
+    header_style = {
+        "padding": "10px 14px", "textAlign": "right",
+        "backgroundColor": config.COLORS["table_header"],
+        "color": config.COLORS["text"], "fontSize": "13px", "fontWeight": "600",
+    }
+    rows = [html.Tr([
+        html.Th("Metric", style={**header_style, "textAlign": "left"}),
+        html.Th(fy, style=header_style),
+        html.Th(prior_fy or "PY", style=header_style),
+        html.Th("Change", style=header_style),
+        html.Th("Change %", style=header_style),
+    ])]
+
+    for metric_name, meta in config.METRICS.items():
+        key = meta["key"]
+        fmt = meta["format"]
+        agg = meta["aggregation"]
+        metric_df = data_module.get_metric_data(all_data, key)
+
+        def month_value(fy_label):
+            if not fy_label:
+                return None
+            sub = metric_df[(metric_df["fy_year"] == fy_label) & (metric_df["fy_month"] == m)]
+            if sub.empty:
+                return None
+            return sub["value"].mean() if agg == "average" else sub["value"].sum()
+
+        v_cy = month_value(fy)
+        v_py = month_value(prior_fy)
+        diff = (v_cy - v_py) if (v_cy is not None and v_py is not None) else None
+        pct = (diff / v_py * 100) if (diff is not None and v_py and v_py != 0) else None
+
+        diff_str, diff_pos = fmt_diff(diff, fmt)
+        pct_str, pct_pos = fmt_pct(pct)
+        diff_color = config.COLORS["positive"] if diff_pos else config.COLORS["negative"]
+        pct_color = config.COLORS["positive"] if pct_pos else config.COLORS["negative"]
+        if diff is None:
+            diff_color = pct_color = config.COLORS["text_muted"]
+
+        cell = {"padding": "9px 14px", "textAlign": "right", "fontSize": "13px",
+                "borderBottom": f"1px solid {config.COLORS['card_border']}"}
+        rows.append(html.Tr([
+            html.Td(metric_name, style={**cell, "textAlign": "left",
+                                        "color": config.COLORS["text"], "fontWeight": "500"}),
+            html.Td(fmt_value(v_cy, fmt), style={**cell, "color": config.COLORS["text"]}),
+            html.Td(fmt_value(v_py, fmt), style={**cell, "color": config.COLORS["text_muted"]}),
+            html.Td(diff_str, style={**cell, "color": diff_color, "fontWeight": "600"}),
+            html.Td(pct_str, style={**cell, "color": pct_color, "fontWeight": "600"}),
+        ]))
+
+    return html.Div([
+        card([
+            html.Div([
+                html.H2(f"Monthly Report — {month_label} {year}", style={
+                    "margin": "0 0 4px 0", "fontSize": "22px", "color": config.COLORS["text"],
+                }),
+                html.Div("Priceline Pharmacy Pacific Fair", style={
+                    "fontSize": "13px", "color": config.COLORS["text_muted"], "marginBottom": "16px",
+                }),
+            ]),
+            html.Div([
+                html.Table(rows, style={"width": "100%", "borderCollapse": "collapse"}),
+            ], style={"overflowX": "auto"}),
+            html.Div(f"Generated {fmt_date(date.today())}", style={
+                "fontSize": "11px", "color": config.COLORS["text_muted"], "marginTop": "16px",
+            }),
+        ]),
+    ], id="report-printable")
+
+
+# ---------------------------------------------------------------------------
 # Callbacks
 # ---------------------------------------------------------------------------
 @app.callback(
@@ -843,23 +1086,40 @@ def build_dow(metric_name: str, all_data: dict):
     Output("last-data-date", "children"),
     Output("last-refresh-time", "children"),
     Output("dropdown-container", "style"),
+    Output("range-container", "style"),
+    Output("report-container", "style"),
+    Output("report-month-dropdown", "options"),
+    Output("report-month-dropdown", "value"),
     Input("main-tabs", "value"),
     Input("metric-dropdown", "value"),
     Input("interval-refresh", "n_intervals"),
     Input("refresh-button", "n_clicks"),
+    Input("date-range-picker", "start_date"),
+    Input("date-range-picker", "end_date"),
+    Input("report-month-dropdown", "value"),
 )
-def update_dashboard(tab, metric_name, _n, _clicks):
+def update_dashboard(tab, metric_name, _n, _clicks, range_start, range_end, report_value):
     ctx = dash.callback_context
     force = bool(ctx.triggered and ctx.triggered[0]["prop_id"].startswith("refresh-button"))
 
     all_data = data_module.get_all_data(force_refresh=force)
 
+    hidden = {"display": "none"}
     dropdown_style = {"marginBottom": "24px"}
-    if tab == "tab-overview":
-        dropdown_style["display"] = "none"
+    if tab in ("tab-overview", "tab-report"):
+        dropdown_style = hidden
+    range_style = {"marginBottom": "24px"} if tab == "tab-range" else hidden
+    report_style = ({"marginBottom": "24px", "display": "flex", "gap": "20px",
+                     "flexWrap": "wrap", "alignItems": "flex-end"}
+                    if tab == "tab-report" else hidden)
 
     if all_data is None:
-        return setup_message(), "Not connected", "", dropdown_style
+        return (setup_message(), "Not connected", "", dropdown_style,
+                range_style, report_style, [], None)
+
+    report_options = get_report_month_options(all_data)
+    if report_value is None and report_options:
+        report_value = report_options[0]["value"]
 
     current_fy = data_module.get_current_fy()
     cy_df = all_data.get(current_fy, pd.DataFrame())
@@ -877,6 +1137,10 @@ def update_dashboard(tab, metric_name, _n, _clicks):
             content = build_trends(metric_name, all_data)
         elif tab == "tab-dow":
             content = build_dow(metric_name, all_data)
+        elif tab == "tab-range":
+            content = build_range(metric_name, all_data, range_start, range_end)
+        elif tab == "tab-report":
+            content = build_report(all_data, report_value)
         else:
             content = build_detail(metric_name, all_data)
     except Exception as exc:
@@ -885,7 +1149,22 @@ def update_dashboard(tab, metric_name, _n, _clicks):
             style={"color": config.COLORS["negative"], "padding": "40px", "textAlign": "center"},
         )
 
-    return content, date_str, refresh_str, dropdown_style
+    return (content, date_str, refresh_str, dropdown_style,
+            range_style, report_style, report_options, report_value)
+
+
+# Browser print dialog (lets the user save the report as a PDF)
+app.clientside_callback(
+    """
+    function(n_clicks) {
+        if (n_clicks > 0) { window.print(); }
+        return "";
+    }
+    """,
+    Output("print-dummy", "children"),
+    Input("print-button", "n_clicks"),
+    prevent_initial_call=True,
+)
 
 
 # ---------------------------------------------------------------------------
