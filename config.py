@@ -115,6 +115,13 @@ METRICS = {
         "aggregation": "sum",
         "group": "Front Shop",
     },
+    "Sisterclub Membership Rate": {
+        "key": "memb_rate",
+        "source": "calculated",
+        "format": "percentage",
+        "aggregation": "average",
+        "group": "Front Shop",
+    },
     # ── Dispensary ──────────────────────────────────────────────────────
     "Dispensary Sales": {
         "key": "non_tax_sales",
@@ -210,6 +217,11 @@ METRICS = {
 }
 
 METRIC_GROUPS = ["Whole Shop", "Front Shop", "Dispensary"]
+
+# Optional daily targets — drawn as a reference line on the Trends chart.
+# Use the metric's daily value (e.g. average daily sales target).
+# Example: TARGETS = {"Daily Sales": 9000, "Script Numbers": 300}
+TARGETS = {}
 
 PALETTES = {
     "dark": {

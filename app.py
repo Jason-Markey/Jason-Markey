@@ -15,6 +15,7 @@ import pandas as pd
 
 import config
 import data as data_module
+import holidays
 
 # ---------------------------------------------------------------------------
 # App init
@@ -72,6 +73,8 @@ def fmt_value_short(val, fmt: str) -> str:
         if abs(val) >= 10_000:
             return f"${val / 1_000:,.0f}K"
         return f"${val:,.0f}"
+    if fmt == "percentage":
+        return f"{val:.1f}%"
     if fmt == "number":
         return f"{val:,.0f}"
     if fmt == "number_2dp":
@@ -89,6 +92,8 @@ def fmt_diff(val, fmt: str):
         return f"{arrow} ${abs(val):,.0f}", positive
     if fmt in ("number", "number_2dp"):
         return f"{arrow} {abs(val):,.0f}", positive
+    if fmt == "percentage":
+        return f"{arrow} {abs(val):.1f}pp", positive
     return f"{arrow} {val:,.2f}", positive
 
 
@@ -225,6 +230,19 @@ def dark_chart_layout(fig, title=None, height=None):
     return fig
 
 
+def add_holiday_markers(fig, start, end):
+    """Dotted vertical lines + labels for QLD public holidays in the window."""
+    for d, name in holidays.holidays_between(start, end).items():
+        x = datetime(d.year, d.month, d.day)
+        fig.add_vline(x=x, line=dict(color=config.COLORS["accent_light"], width=1, dash="dot"))
+        fig.add_annotation(
+            x=x, y=1, yref="paper", yanchor="bottom",
+            text=name, showarrow=False, textangle=-38,
+            font=dict(size=9, color=config.COLORS["text_muted"]),
+        )
+    return fig
+
+
 TAB_STYLE = {
     "backgroundColor": config.COLORS["card"],
     "color": config.COLORS["text_muted"],
@@ -330,6 +348,8 @@ app.layout = html.Div(
                         style=TAB_STYLE, selected_style=TAB_SELECTED_STYLE),
                 dcc.Tab(label="Metric Detail", value="tab-detail",
                         style=TAB_STYLE, selected_style=TAB_SELECTED_STYLE),
+                dcc.Tab(label="Month Detail", value="tab-month",
+                        style=TAB_STYLE, selected_style=TAB_SELECTED_STYLE),
                 dcc.Tab(label="Trends", value="tab-trends",
                         style=TAB_STYLE, selected_style=TAB_SELECTED_STYLE),
                 dcc.Tab(label="Day of Week", value="tab-dow",
@@ -403,6 +423,20 @@ app.layout = html.Div(
             }),
         ], id="report-container", style={"display": "none"}),
 
+        # ── Month picker (Month Detail tab only) ──────────────────────────
+        html.Div([
+            html.Label("Month", style={"color": config.COLORS["text_muted"],
+                                       "fontSize": "13px", "marginBottom": "6px",
+                                       "display": "block"}),
+            dcc.Dropdown(
+                id="month-detail-dropdown",
+                clearable=False,
+                style={"width": "240px", "maxWidth": "100%",
+                       "color": "#000000", "backgroundColor": "#ffffff"},
+                className="metric-dropdown",
+            ),
+        ], id="month-container", style={"display": "none"}),
+
         html.Div(id="main-content"),
         html.Div(id="print-dummy", style={"display": "none"}),
     ],
@@ -440,6 +474,29 @@ def build_overview(all_data: dict):
         return dcc.Graph(figure=fig, config={"staticPlot": True},
                          style={"height": "42px", "marginTop": "8px"})
 
+    def weekly_bars(metric_df, agg):
+        """Last 8 full weeks as tiny bars — recent trajectory at a glance."""
+        cutoff = date.today() - timedelta(days=63)
+        sub = metric_df[metric_df["date"] >= cutoff].sort_values("date")
+        if len(sub) < 14:
+            return None
+        s = sub.set_index(pd.to_datetime(sub["date"]))["value"]
+        weekly = s.resample("W-SUN").mean() if agg == "average" else s.resample("W-SUN").sum()
+        weekly = weekly.dropna().tail(8)
+        if len(weekly) < 3:
+            return None
+        colors = [config.COLORS["line_py"]] * (len(weekly) - 1) + [config.COLORS["line_cy"]]
+        fig = go.Figure(go.Bar(x=list(range(len(weekly))), y=list(weekly.values),
+                               marker_color=colors))
+        fig.update_layout(
+            margin=dict(l=0, r=0, t=2, b=0),
+            paper_bgcolor="rgba(0,0,0,0)", plot_bgcolor="rgba(0,0,0,0)",
+            xaxis=dict(visible=False), yaxis=dict(visible=False),
+            showlegend=False, height=30, bargap=0.25,
+        )
+        return dcc.Graph(figure=fig, config={"staticPlot": True},
+                         style={"height": "30px", "marginTop": "4px"})
+
     def metric_card(metric_name, meta):
         key = meta["key"]
         fmt = meta["format"]
@@ -470,6 +527,7 @@ def build_overview(all_data: dict):
                 }),
             ]),
             sparkline(metric_df),
+            weekly_bars(metric_df, agg),
         ], style={"flex": "1 1 200px", "minWidth": "180px", "padding": "16px"})
 
     sections = [
@@ -843,6 +901,38 @@ def build_trends(metric_name: str, all_data: dict):
     ))
     dark_chart_layout(fig, title=f"{metric_name} — Rolling Trend (last 14 months)")
 
+    # Public holiday markers
+    if len(daily):
+        add_holiday_markers(fig, daily.index.min(), daily.index.max())
+
+    # Optional target reference line (set in config.TARGETS)
+    target = config.TARGETS.get(metric_name)
+    if target:
+        fig.add_hline(
+            y=target,
+            line=dict(color=config.COLORS["positive"], width=1.5, dash="dash"),
+            annotation_text=f"Target {fmt_value(target, meta['format'])}",
+            annotation_font=dict(color=config.COLORS["positive"], size=11),
+        )
+
+    # Anomalies: days more than 20% below the average of the prior 8 same weekdays
+    anom_x, anom_y = [], []
+    work = metric_df[metric_df["date"] >= cutoff].sort_values("date").copy()
+    work["weekday"] = work["date"].apply(lambda d: d.weekday())
+    for _, grp in work.groupby("weekday"):
+        baseline = grp["value"].rolling(8, min_periods=4).mean().shift(1)
+        flags = grp["value"] < baseline * 0.8
+        for (_, row), flag in zip(grp.iterrows(), flags):
+            if flag:
+                anom_x.append(row["date"])
+                anom_y.append(row["value"])
+    if anom_x:
+        fig.add_trace(go.Scatter(
+            x=anom_x, y=anom_y, mode="markers", name="Unusually quiet day",
+            marker=dict(size=9, color=config.COLORS["negative"],
+                        symbol="circle-open", line=dict(width=2)),
+        ))
+
     # ── Scripts vs Front Shop correlation (only shown once, on Trends tab) ──
     scripts_df = data_module.get_metric_data(all_data, "script_nos")
     sales_df = data_module.get_metric_data(all_data, "tax_sales")
@@ -879,11 +969,50 @@ def build_trends(metric_name: str, all_data: dict):
             ),
         ])]
 
+    # ── Script type mix (% of dispensary dollars by category, monthly) ──────
+    mix_section = []
+    mix_keys = [
+        ("Concession", "concession"), ("General", "general"),
+        ("Entitlement", "entitlement"), ("Safety Net", "safety_net"),
+        ("Private", "private_disp"), ("Repat", "repat"),
+    ]
+    mix_colors = [config.COLORS["line_cy"], config.COLORS["line_py"],
+                  config.COLORS["line_2yr"], config.COLORS["accent_light"],
+                  config.COLORS["positive"], config.COLORS["text_muted"]]
+    mix_cutoff = date.today() - timedelta(days=425)
+    fig3 = go.Figure()
+    has_mix = False
+    for (label, mkey), colr in zip(mix_keys, mix_colors):
+        mdf = data_module.get_metric_data(all_data, mkey)
+        mdf = mdf[mdf["date"] >= mix_cutoff]
+        if mdf.empty:
+            continue
+        has_mix = True
+        s = mdf.set_index(pd.to_datetime(mdf["date"]))["value"].resample("MS").sum()
+        fig3.add_trace(go.Bar(x=list(s.index), y=list(s.values), name=label,
+                              marker_color=colr))
+    if has_mix:
+        dark_chart_layout(fig3, title="Script Type Mix — share of dispensary $ by month")
+        fig3.update_layout(barmode="stack", barnorm="percent", hovermode="x unified")
+        fig3.update_yaxes(ticksuffix="%", tickformat=".0f")
+        mix_section = [card([
+            dcc.Graph(figure=fig3, config=GRAPH_CONFIG, style={"height": "380px"}),
+            html.Div(
+                "Shows how the dispensary mix (concession / general / private etc.) is shifting over time.",
+                style={"fontSize": "12px", "color": config.COLORS["text_muted"], "marginTop": "8px"},
+            ),
+        ], style={"marginTop": "24px"})]
+
     return html.Div([
         card([
             dcc.Graph(figure=fig, config=GRAPH_CONFIG, style={"height": "380px"}),
+            html.Div(
+                "Dotted vertical lines are QLD public holidays. Red circles flag days more than "
+                "20% below the recent average for that weekday.",
+                style={"fontSize": "12px", "color": config.COLORS["text_muted"], "marginTop": "8px"},
+            ),
         ], style={"marginBottom": "24px"}),
-    ] + corr_section)
+    ] + corr_section + mix_section)
 
 
 # ---------------------------------------------------------------------------
@@ -1009,6 +1138,7 @@ def build_range(metric_name: str, all_data: dict, start, end):
             line=dict(color=config.COLORS["line_py"], width=2, dash="dot"), marker=dict(size=4),
         ))
     dark_chart_layout(fig, title=f"{metric_name} — {fmt_date(start)} to {fmt_date(end)}")
+    add_holiday_markers(fig, start, end)
 
     label = "Average" if agg == "average" else "Total"
     return html.Div([
@@ -1035,6 +1165,141 @@ def build_range(metric_name: str, all_data: dict, start, end):
             dcc.Graph(figure=fig, config=GRAPH_CONFIG, style={"height": "380px"}),
         ]),
     ])
+
+
+# ---------------------------------------------------------------------------
+# Month Detail tab — one month, days across the x-axis, year over year
+# ---------------------------------------------------------------------------
+def build_month_detail(metric_name: str, all_data: dict, month_value: str):
+    if not month_value:
+        return html.Div("Select a month.", style={"color": config.COLORS["text_muted"]})
+
+    meta = config.METRICS[metric_name]
+    key = meta["key"]
+    fmt = meta["format"]
+    agg = meta["aggregation"]
+
+    fy, m = month_value.split("|")
+    m = int(m)
+    prior_fy = data_module.get_prior_fy(fy, 1)
+    two_yr_fy = data_module.get_prior_fy(fy, 2)
+
+    month_label = MONTH_LABELS[m - 1]
+    start_yy = int(fy.split("/")[0])
+    year = 2000 + start_yy + (0 if m <= (12 - config.FY_START_MONTH + 1) else 1)
+    cal_month = (m + config.FY_START_MONTH - 2) % 12 + 1
+
+    metric_df = data_module.get_metric_data(all_data, key)
+    if metric_df.empty:
+        return html.Div("No data available.", style={"color": config.COLORS["text_muted"]})
+
+    def month_days(fy_label):
+        """Series indexed by day-of-month for one FY's month."""
+        if not fy_label:
+            return pd.Series(dtype=float)
+        sub = metric_df[(metric_df["fy_year"] == fy_label) & (metric_df["fy_month"] == m)].copy()
+        if sub.empty:
+            return pd.Series(dtype=float)
+        sub["day"] = sub["date"].apply(lambda d: d.day)
+        return sub.sort_values("day").set_index("day")["value"]
+
+    cy_days = month_days(fy)
+    py_days = month_days(prior_fy)
+    twoyr_days = month_days(two_yr_fy)
+
+    days = list(range(1, 32))
+
+    def y_for(series):
+        return [series.get(d, None) for d in days]
+
+    # ── Daily line chart ────────────────────────────────────────────────
+    fig = go.Figure()
+    fig.add_trace(go.Scatter(
+        x=days, y=y_for(cy_days), mode="lines+markers", name=fy,
+        line=dict(color=config.COLORS["line_cy"], width=2.5),
+        marker=dict(size=6), connectgaps=False,
+    ))
+    if prior_fy and not py_days.empty:
+        fig.add_trace(go.Scatter(
+            x=days, y=y_for(py_days), mode="lines+markers", name=prior_fy,
+            line=dict(color=config.COLORS["line_py"], width=2),
+            marker=dict(size=5), connectgaps=False,
+        ))
+    if two_yr_fy and not twoyr_days.empty:
+        fig.add_trace(go.Scatter(
+            x=days, y=y_for(twoyr_days), mode="lines+markers", name=two_yr_fy,
+            line=dict(color=config.COLORS["line_2yr"], width=2),
+            marker=dict(size=5), connectgaps=False,
+        ))
+    dark_chart_layout(fig, title=f"{metric_name} — {month_label} {year} by day")
+    fig.update_xaxes(dtick=1, title_text="Day of month")
+
+    # Mark public holidays falling in this month (current year shown)
+    for d, name in holidays.qld_holidays(year).items():
+        if d.month == cal_month:
+            fig.add_vline(x=d.day, line=dict(color=config.COLORS["accent_light"],
+                                             width=1, dash="dot"))
+            fig.add_annotation(x=d.day, y=1, yref="paper", yanchor="bottom",
+                               text=name, showarrow=False, textangle=-38,
+                               font=dict(size=9, color=config.COLORS["text_muted"]))
+
+    # ── Cumulative chart (sum metrics only) ─────────────────────────────
+    cumulative_card = []
+    if agg == "sum":
+        fig2 = go.Figure()
+        for label, series, colr, width in [
+            (fy, cy_days, config.COLORS["line_cy"], 2.5),
+            (prior_fy, py_days, config.COLORS["line_py"], 2),
+            (two_yr_fy, twoyr_days, config.COLORS["line_2yr"], 2),
+        ]:
+            if not label or series.empty:
+                continue
+            cum = series.sort_index().cumsum()
+            fig2.add_trace(go.Scatter(
+                x=list(cum.index), y=list(cum.values), mode="lines", name=label,
+                line=dict(color=colr, width=width),
+            ))
+        dark_chart_layout(fig2, title=f"{metric_name} — {month_label} running total")
+        fig2.update_xaxes(dtick=2, title_text="Day of month")
+        cumulative_card = [card([
+            dcc.Graph(figure=fig2, config=GRAPH_CONFIG, style={"height": "340px"}),
+        ], style={"marginBottom": "24px"})]
+
+    # ── Summary card ────────────────────────────────────────────────────
+    def month_total(series):
+        if series.empty:
+            return None
+        return series.mean() if agg == "average" else series.sum()
+
+    v_cy, v_py = month_total(cy_days), month_total(py_days)
+    diff = (v_cy - v_py) if (v_cy is not None and v_py is not None) else None
+    pct = (diff / v_py * 100) if (diff is not None and v_py and v_py != 0) else None
+    diff_str, diff_pos = fmt_diff(diff, fmt)
+    pct_str, pct_pos = fmt_pct(pct)
+    label = "Average" if agg == "average" else "Total"
+
+    return html.Div([
+        html.Div([
+            card([
+                html.Div(f"{metric_name} — {month_label} {year} {label.lower()}", style={
+                    "fontSize": "13px", "color": config.COLORS["text_muted"], "marginBottom": "8px",
+                }),
+                html.Div(fmt_value(v_cy, fmt), style={
+                    "fontSize": "32px", "fontWeight": "700",
+                    "color": config.COLORS["text"], "marginBottom": "12px",
+                }),
+                html.Hr(style={"borderColor": config.COLORS["card_border"], "margin": "12px 0"}),
+                comparison_line(f"vs {month_label} {prior_fy}" if prior_fy else "vs PY",
+                                diff_str, diff_pos, pct_str, pct_pos),
+                html.Div(f"Last year: {fmt_value(v_py, fmt)}", style={
+                    "fontSize": "13px", "color": config.COLORS["text_muted"],
+                }),
+            ], style={"flex": "1 1 300px", "minWidth": "280px"}),
+        ], style={"display": "flex", "flexWrap": "wrap", "gap": "20px", "marginBottom": "24px"}),
+        card([
+            dcc.Graph(figure=fig, config=GRAPH_CONFIG, style={"height": "400px"}),
+        ], style={"marginBottom": "24px"}),
+    ] + cumulative_card)
 
 
 # ---------------------------------------------------------------------------
@@ -1167,6 +1432,9 @@ def toggle_theme(_clicks, current):
     Output("report-container", "style"),
     Output("report-month-dropdown", "options"),
     Output("report-month-dropdown", "value"),
+    Output("month-container", "style"),
+    Output("month-detail-dropdown", "options"),
+    Output("month-detail-dropdown", "value"),
     Output("page-root", "style"),
     Output("page-root", "className"),
     Input("main-tabs", "value"),
@@ -1176,9 +1444,11 @@ def toggle_theme(_clicks, current):
     Input("date-range-picker", "start_date"),
     Input("date-range-picker", "end_date"),
     Input("report-month-dropdown", "value"),
+    Input("month-detail-dropdown", "value"),
     Input("theme-store", "data"),
 )
-def update_dashboard(tab, metric_name, _n, _clicks, range_start, range_end, report_value, theme):
+def update_dashboard(tab, metric_name, _n, _clicks, range_start, range_end,
+                     report_value, month_value, theme):
     ctx = dash.callback_context
     force = bool(ctx.triggered and ctx.triggered[0]["prop_id"].startswith("refresh-button"))
 
@@ -1203,14 +1473,18 @@ def update_dashboard(tab, metric_name, _n, _clicks, range_start, range_end, repo
     report_style = ({"marginBottom": "24px", "display": "flex", "gap": "20px",
                      "flexWrap": "wrap", "alignItems": "flex-end"}
                     if tab == "tab-report" else hidden)
+    month_style = {"marginBottom": "24px"} if tab == "tab-month" else hidden
 
     if all_data is None:
         return (setup_message(), "Not connected", "", dropdown_style,
-                range_style, report_style, [], None, root_style, root_class)
+                range_style, report_style, [], None,
+                month_style, [], None, root_style, root_class)
 
     report_options = get_report_month_options(all_data)
     if report_value is None and report_options:
         report_value = report_options[0]["value"]
+    if month_value is None and report_options:
+        month_value = report_options[0]["value"]
 
     current_fy = data_module.get_current_fy()
     cy_df = all_data.get(current_fy, pd.DataFrame())
@@ -1232,6 +1506,8 @@ def update_dashboard(tab, metric_name, _n, _clicks, range_start, range_end, repo
             content = build_range(metric_name, all_data, range_start, range_end)
         elif tab == "tab-report":
             content = build_report(all_data, report_value)
+        elif tab == "tab-month":
+            content = build_month_detail(metric_name, all_data, month_value)
         else:
             content = build_detail(metric_name, all_data)
     except Exception as exc:
@@ -1242,6 +1518,7 @@ def update_dashboard(tab, metric_name, _n, _clicks, range_start, range_end, repo
 
     return (content, date_str, refresh_str, dropdown_style,
             range_style, report_style, report_options, report_value,
+            month_style, report_options, month_value,
             root_style, root_class)
 
 

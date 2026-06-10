@@ -162,6 +162,11 @@ def load_all_data(client, spreadsheet_name=None):
             lambda r: (r.get("daily_sales") or 0) - (r.get("tax_sales") or 0) + (r.get("govt_rec") or 0),
             axis=1,
         )
+    if "cust_memb" in combined.columns and "tot_cust" in combined.columns:
+        combined["memb_rate"] = combined.apply(
+            lambda r: r["cust_memb"] / r["tot_cust"] * 100 if r.get("tot_cust") and r["tot_cust"] > 0 else None,
+            axis=1,
+        )
     if "daily_sales" in combined.columns and "govt_rec" in combined.columns:
         combined["total_plus_gov"] = combined.apply(
             lambda r: (r.get("daily_sales") or 0) + (r.get("govt_rec") or 0),

@@ -36,6 +36,8 @@ def fmt_value(val, fmt):
         return f"{val:,.0f}"
     if fmt == "number_2dp":
         return f"{val:,.2f}"
+    if fmt == "percentage":
+        return f"{val:.1f}%"
     return str(val)
 
 
