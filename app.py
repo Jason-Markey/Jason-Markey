@@ -203,16 +203,6 @@ app.layout = html.Div(
                 style={"width": "320px"},
                 className="metric-dropdown",
             ),
-            html.Style("""
-                .metric-dropdown .Select-value-label { color: #ffffff !important; }
-                .metric-dropdown .Select-control { background-color: #16213e !important; border-color: #0f3460 !important; }
-                .metric-dropdown .Select-menu-outer { background-color: #16213e !important; border-color: #0f3460 !important; }
-                .metric-dropdown .Select-option { background-color: #16213e !important; color: #ffffff !important; }
-                .metric-dropdown .Select-option:hover { background-color: #0f3460 !important; }
-                .metric-dropdown .Select-placeholder { color: #a0a0b8 !important; }
-                .metric-dropdown input { color: #ffffff !important; }
-                .metric-dropdown .Select-arrow { border-top-color: #a0a0b8 !important; }
-            """),
         ], style={"marginBottom": "24px"}),
 
         # ── Main content (hidden until data loads) ───────────────────────────
