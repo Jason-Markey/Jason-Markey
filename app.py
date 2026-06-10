@@ -474,29 +474,6 @@ def build_overview(all_data: dict):
         return dcc.Graph(figure=fig, config={"staticPlot": True},
                          style={"height": "42px", "marginTop": "8px"})
 
-    def weekly_bars(metric_df, agg):
-        """Last 8 full weeks as tiny bars — recent trajectory at a glance."""
-        cutoff = date.today() - timedelta(days=63)
-        sub = metric_df[metric_df["date"] >= cutoff].sort_values("date")
-        if len(sub) < 14:
-            return None
-        s = sub.set_index(pd.to_datetime(sub["date"]))["value"]
-        weekly = s.resample("W-SUN").mean() if agg == "average" else s.resample("W-SUN").sum()
-        weekly = weekly.dropna().tail(8)
-        if len(weekly) < 3:
-            return None
-        colors = [config.COLORS["line_py"]] * (len(weekly) - 1) + [config.COLORS["line_cy"]]
-        fig = go.Figure(go.Bar(x=list(range(len(weekly))), y=list(weekly.values),
-                               marker_color=colors))
-        fig.update_layout(
-            margin=dict(l=0, r=0, t=2, b=0),
-            paper_bgcolor="rgba(0,0,0,0)", plot_bgcolor="rgba(0,0,0,0)",
-            xaxis=dict(visible=False), yaxis=dict(visible=False),
-            showlegend=False, height=30, bargap=0.25,
-        )
-        return dcc.Graph(figure=fig, config={"staticPlot": True},
-                         style={"height": "30px", "marginTop": "4px"})
-
     def metric_card(metric_name, meta):
         key = meta["key"]
         fmt = meta["format"]
@@ -527,7 +504,6 @@ def build_overview(all_data: dict):
                 }),
             ]),
             sparkline(metric_df),
-            weekly_bars(metric_df, agg),
         ], style={"flex": "1 1 200px", "minWidth": "180px", "padding": "16px"})
 
     sections = [
