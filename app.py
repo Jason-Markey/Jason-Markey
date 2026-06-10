@@ -136,9 +136,15 @@ def get_ytd(df: pd.DataFrame, agg: str, current_fy: str):
     return sub["value"].sum()
 
 
-def get_ytd_to_month(df: pd.DataFrame, agg: str, fy: str, max_month: int):
-    """YTD for a prior year capped at the same FY month as current year."""
-    sub = df[(df["fy_year"] == fy) & (df["fy_month"] <= max_month)]
+def get_ytd_to_month(df: pd.DataFrame, agg: str, fy: str, max_month: int, max_day: int = None):
+    """YTD for a prior year capped at the same FY month — and, if max_day is
+    given, capped at the same day within that final month (true like-for-like)."""
+    in_fy = df["fy_year"] == fy
+    before_month = df["fy_month"] < max_month
+    in_month = df["fy_month"] == max_month
+    if max_day is not None:
+        in_month = in_month & (df["date"].apply(lambda d: d.day) <= max_day)
+    sub = df[in_fy & (before_month | in_month)]
     if sub.empty:
         return None
     if agg == "average":
@@ -486,7 +492,7 @@ def build_overview(all_data: dict):
         metric_df = data_module.get_metric_data(all_data, key)
 
         ytd_cy = get_ytd(metric_df, agg, current_fy)
-        ytd_py = get_ytd_to_month(metric_df, agg, prior_fy, current_fy_month) if prior_fy else None
+        ytd_py = get_ytd_to_month(metric_df, agg, prior_fy, current_fy_month, today.day) if prior_fy else None
         pct = None
         if ytd_cy is not None and ytd_py and ytd_py != 0:
             pct = (ytd_cy - ytd_py) / ytd_py * 100
@@ -558,8 +564,8 @@ def build_detail(metric_name: str, all_data: dict):
 
     # ── YTD values ────────────────────────────────────────────────────────
     ytd_cy = get_ytd(metric_df, agg, current_fy)
-    ytd_py = get_ytd_to_month(metric_df, agg, prior_fy, current_fy_month) if prior_fy else None
-    ytd_2yr = get_ytd_to_month(metric_df, agg, two_yr_fy, current_fy_month) if two_yr_fy else None
+    ytd_py = get_ytd_to_month(metric_df, agg, prior_fy, current_fy_month, today.day) if prior_fy else None
+    ytd_2yr = get_ytd_to_month(metric_df, agg, two_yr_fy, current_fy_month, today.day) if two_yr_fy else None
 
     diff_py = (ytd_cy - ytd_py) if (ytd_cy is not None and ytd_py is not None) else None
     diff_2yr = (ytd_cy - ytd_2yr) if (ytd_cy is not None and ytd_2yr is not None) else None
@@ -806,6 +812,12 @@ def build_detail(metric_name: str, all_data: dict):
                     style={"width": "100%", "borderCollapse": "collapse"},
                 ),
             ], style={"overflowX": "auto"}),
+            html.Div(
+                f"Note: {month_name} is part-complete, so its column compares against the "
+                "full month last year. The YTD cards above are like-for-like (prior years "
+                "cut off at the same day).",
+                style={"fontSize": "11px", "color": config.COLORS["text_muted"], "marginTop": "8px"},
+            ),
         ], style={"marginBottom": "24px"}),
 
         # Last 10 days
