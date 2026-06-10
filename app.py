@@ -243,7 +243,14 @@ TAB_SELECTED_STYLE = {
 # ---------------------------------------------------------------------------
 # Layout
 # ---------------------------------------------------------------------------
-DROPDOWN_OPTIONS = [{"label": name, "value": name} for name in config.METRICS]
+DROPDOWN_OPTIONS = []
+for _group in config.METRIC_GROUPS:
+    DROPDOWN_OPTIONS.append({
+        "label": f"── {_group} ──", "value": f"__header_{_group}", "disabled": True,
+    })
+    for _name, _meta in config.METRICS.items():
+        if _meta.get("group") == _group:
+            DROPDOWN_OPTIONS.append({"label": f"    {_name}", "value": _name})
 
 app.layout = html.Div(
     style={
@@ -389,8 +396,7 @@ def build_overview(all_data: dict):
     today = date.today()
     current_fy_month = data_module.get_fy_month(today)
 
-    cards = []
-    for metric_name, meta in config.METRICS.items():
+    def metric_card(metric_name, meta):
         key = meta["key"]
         fmt = meta["format"]
         agg = meta["aggregation"]
@@ -403,7 +409,7 @@ def build_overview(all_data: dict):
             pct = (ytd_cy - ytd_py) / ytd_py * 100
         pct_str, pct_pos = fmt_pct(pct)
 
-        cards.append(card([
+        return card([
             html.Div(metric_name, style={
                 "fontSize": "12px", "color": config.COLORS["text_muted"],
                 "marginBottom": "6px", "minHeight": "30px",
@@ -419,17 +425,33 @@ def build_overview(all_data: dict):
                     "color": config.COLORS["positive"] if pct_pos else config.COLORS["negative"],
                 }),
             ]),
-        ], style={"flex": "1 1 200px", "minWidth": "180px", "padding": "16px"}))
+        ], style={"flex": "1 1 200px", "minWidth": "180px", "padding": "16px"})
 
-    return html.Div([
+    sections = [
         html.Div(f"Year to Date ({current_fy}) — all metrics vs same point last year", style={
             "fontSize": "13px", "color": config.COLORS["text_muted"],
             "marginBottom": "16px",
         }),
-        html.Div(cards, style={
+    ]
+    for group in config.METRIC_GROUPS:
+        group_cards = [
+            metric_card(name, meta)
+            for name, meta in config.METRICS.items()
+            if meta.get("group") == group
+        ]
+        if not group_cards:
+            continue
+        sections.append(html.Div(group, style={
+            "fontSize": "15px", "fontWeight": "700", "color": config.COLORS["text"],
+            "textTransform": "uppercase", "letterSpacing": "1.5px",
+            "margin": "20px 0 12px 0", "paddingBottom": "6px",
+            "borderBottom": f"2px solid {config.COLORS['accent_light']}",
+        }))
+        sections.append(html.Div(group_cards, style={
             "display": "flex", "flexWrap": "wrap", "gap": "14px",
-        }),
-    ])
+        }))
+
+    return html.Div(sections)
 
 
 # ---------------------------------------------------------------------------

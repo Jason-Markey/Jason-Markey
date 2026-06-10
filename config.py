@@ -54,135 +54,162 @@ DISP_COLS = {
     "gross_profit": 12,         # M
 }
 
-# Dashboard metrics — source tells us which tab, calculated means derived
+# Dashboard metrics — source tells us which tab, calculated means derived.
+# "group" controls how metrics are grouped in the dropdown and Overview page.
 METRICS = {
+    # ── Whole Shop ──────────────────────────────────────────────────────
     "Daily Sales": {
         "key": "daily_sales",
         "source": "front_shop",
         "format": "currency",
         "aggregation": "sum",
-    },
-    "Front Shop Sales": {
-        "key": "tax_sales",
-        "source": "front_shop",
-        "format": "currency",
-        "aggregation": "sum",
-    },
-    "Dispensary Sales": {
-        "key": "non_tax_sales",
-        "source": "front_shop",
-        "format": "currency",
-        "aggregation": "sum",
-    },
-    "Average Sale": {
-        "key": "ave_sale",
-        "source": "calculated",
-        "format": "currency",
-        "aggregation": "average",
-    },
-    "Items Per Sale": {
-        "key": "items_per_sale",
-        "source": "calculated",
-        "format": "number_2dp",
-        "aggregation": "average",
-    },
-    "Sisterclub Sales": {
-        "key": "club_sales",
-        "source": "front_shop",
-        "format": "currency",
-        "aggregation": "sum",
-    },
-    "Click & Collect": {
-        "key": "click_collect",
-        "source": "front_shop",
-        "format": "currency",
-        "aggregation": "sum",
-    },
-    "Patient Contribution Incl S3s": {
-        "key": "patient_cont_incl_s3",
-        "source": "dispensary",
-        "format": "currency",
-        "aggregation": "sum",
-    },
-    "Government Recovery": {
-        "key": "govt_rec",
-        "source": "dispensary",
-        "format": "currency",
-        "aggregation": "sum",
+        "group": "Whole Shop",
     },
     "Daily Sales - Tax + Gov Recovery": {
         "key": "dly_sales_tax_govt",
         "source": "calculated",
         "format": "currency",
         "aggregation": "sum",
-    },
-    "Script Numbers": {
-        "key": "script_nos",
-        "source": "dispensary",
-        "format": "number",
-        "aggregation": "sum",
-    },
-    "Total Script": {
-        "key": "total_script",
-        "source": "dispensary",
-        "format": "currency",
-        "aggregation": "sum",
-    },
-    "Safety Net": {
-        "key": "safety_net",
-        "source": "dispensary",
-        "format": "currency",
-        "aggregation": "sum",
-    },
-    "General": {
-        "key": "general",
-        "source": "dispensary",
-        "format": "currency",
-        "aggregation": "sum",
-    },
-    "Concession": {
-        "key": "concession",
-        "source": "dispensary",
-        "format": "currency",
-        "aggregation": "sum",
-    },
-    "Entitlement": {
-        "key": "entitlement",
-        "source": "dispensary",
-        "format": "currency",
-        "aggregation": "sum",
-    },
-    "Repat": {
-        "key": "repat",
-        "source": "dispensary",
-        "format": "currency",
-        "aggregation": "sum",
-    },
-    "Private": {
-        "key": "private_disp",
-        "source": "dispensary",
-        "format": "currency",
-        "aggregation": "sum",
-    },
-    "S3 Record": {
-        "key": "s3_record",
-        "source": "dispensary",
-        "format": "currency",
-        "aggregation": "sum",
-    },
-    "Dispensary Gross Profit": {
-        "key": "gross_profit",
-        "source": "dispensary",
-        "format": "currency",
-        "aggregation": "sum",
+        "group": "Whole Shop",
     },
     "Total + Gov": {
         "key": "total_plus_gov",
         "source": "calculated",
         "format": "currency",
         "aggregation": "sum",
+        "group": "Whole Shop",
+    },
+    "Average Sale": {
+        "key": "ave_sale",
+        "source": "calculated",
+        "format": "currency",
+        "aggregation": "average",
+        "group": "Whole Shop",
+    },
+    "Items Per Sale": {
+        "key": "items_per_sale",
+        "source": "calculated",
+        "format": "number_2dp",
+        "aggregation": "average",
+        "group": "Whole Shop",
+    },
+    # ── Front Shop ──────────────────────────────────────────────────────
+    "Front Shop Sales": {
+        "key": "tax_sales",
+        "source": "front_shop",
+        "format": "currency",
+        "aggregation": "sum",
+        "group": "Front Shop",
+    },
+    "Sisterclub Sales": {
+        "key": "club_sales",
+        "source": "front_shop",
+        "format": "currency",
+        "aggregation": "sum",
+        "group": "Front Shop",
+    },
+    "Click & Collect": {
+        "key": "click_collect",
+        "source": "front_shop",
+        "format": "currency",
+        "aggregation": "sum",
+        "group": "Front Shop",
+    },
+    # ── Dispensary ──────────────────────────────────────────────────────
+    "Dispensary Sales": {
+        "key": "non_tax_sales",
+        "source": "front_shop",
+        "format": "currency",
+        "aggregation": "sum",
+        "group": "Dispensary",
+    },
+    "Dispensary Gross Profit": {
+        "key": "gross_profit",
+        "source": "dispensary",
+        "format": "currency",
+        "aggregation": "sum",
+        "group": "Dispensary",
+    },
+    "Script Numbers": {
+        "key": "script_nos",
+        "source": "dispensary",
+        "format": "number",
+        "aggregation": "sum",
+        "group": "Dispensary",
+    },
+    "Total Script": {
+        "key": "total_script",
+        "source": "dispensary",
+        "format": "currency",
+        "aggregation": "sum",
+        "group": "Dispensary",
+    },
+    "Patient Contribution Incl S3s": {
+        "key": "patient_cont_incl_s3",
+        "source": "dispensary",
+        "format": "currency",
+        "aggregation": "sum",
+        "group": "Dispensary",
+    },
+    "Government Recovery": {
+        "key": "govt_rec",
+        "source": "dispensary",
+        "format": "currency",
+        "aggregation": "sum",
+        "group": "Dispensary",
+    },
+    "Safety Net": {
+        "key": "safety_net",
+        "source": "dispensary",
+        "format": "currency",
+        "aggregation": "sum",
+        "group": "Dispensary",
+    },
+    "General": {
+        "key": "general",
+        "source": "dispensary",
+        "format": "currency",
+        "aggregation": "sum",
+        "group": "Dispensary",
+    },
+    "Concession": {
+        "key": "concession",
+        "source": "dispensary",
+        "format": "currency",
+        "aggregation": "sum",
+        "group": "Dispensary",
+    },
+    "Entitlement": {
+        "key": "entitlement",
+        "source": "dispensary",
+        "format": "currency",
+        "aggregation": "sum",
+        "group": "Dispensary",
+    },
+    "Repat": {
+        "key": "repat",
+        "source": "dispensary",
+        "format": "currency",
+        "aggregation": "sum",
+        "group": "Dispensary",
+    },
+    "Private": {
+        "key": "private_disp",
+        "source": "dispensary",
+        "format": "currency",
+        "aggregation": "sum",
+        "group": "Dispensary",
+    },
+    "S3 Record": {
+        "key": "s3_record",
+        "source": "dispensary",
+        "format": "currency",
+        "aggregation": "sum",
+        "group": "Dispensary",
     },
 }
+
+METRIC_GROUPS = ["Whole Shop", "Front Shop", "Dispensary"]
 
 COLORS = {
     "background": "#1a1a2e",
