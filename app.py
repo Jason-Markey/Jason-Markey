@@ -89,6 +89,9 @@ def fmt_diff(val, fmt: str):
     positive = val >= 0
     arrow = "▲" if positive else "▼"
     if fmt == "currency":
+        # Small differences (e.g. Average Sale) need cents to be visible
+        if abs(val) < 100:
+            return f"{arrow} ${abs(val):,.2f}", positive
         return f"{arrow} ${abs(val):,.0f}", positive
     if fmt == "number":
         return f"{arrow} {abs(val):,.0f}", positive
