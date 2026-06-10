@@ -62,12 +62,6 @@ METRICS = {
         "format": "currency",
         "aggregation": "sum",
     },
-    "Net Sales": {
-        "key": "net_sales",
-        "source": "front_shop",
-        "format": "currency",
-        "aggregation": "sum",
-    },
     "Average Sale": {
         "key": "ave_sale",
         "source": "calculated",
@@ -82,12 +76,6 @@ METRICS = {
     },
     "Sisterclub Sales": {
         "key": "club_sales",
-        "source": "front_shop",
-        "format": "currency",
-        "aggregation": "sum",
-    },
-    "Cash": {
-        "key": "cash_for_bank",
         "source": "front_shop",
         "format": "currency",
         "aggregation": "sum",
