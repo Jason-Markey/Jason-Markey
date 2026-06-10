@@ -170,7 +170,7 @@ METRICS = {
         "format": "currency",
         "aggregation": "sum",
     },
-    "Gross Profit": {
+    "Dispensary Gross Profit": {
         "key": "gross_profit",
         "source": "dispensary",
         "format": "currency",
