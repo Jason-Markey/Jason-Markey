@@ -43,6 +43,24 @@ button:active {
     padding: 6px 8px;
 }
 
+/* ── Light theme overrides for static elements (header, tabs, labels) ── */
+.theme-light #app-header h1 { color: #1a1a2e !important; }
+.theme-light #app-header span { color: #5a5f73 !important; }
+.theme-light #app-header #last-data-date { color: #533483 !important; }
+.theme-light label { color: #5a5f73 !important; }
+.theme-light .tab {
+    background-color: #ffffff !important;
+    color: #5a5f73 !important;
+    border-color: #d8dce6 !important;
+}
+.theme-light .tab--selected {
+    background-color: #0f3460 !important;
+    color: #ffffff !important;
+}
+.theme-light #theme-toggle { color: #5a5f73 !important; border-color: #d8dce6 !important; }
+.theme-dark #app-header span { color: #a0a0b8; }
+.theme-dark #app-header #last-data-date { color: #533483; }
+
 /* ── Print: white background, hide controls, show only the report ── */
 @media print {
     body, body > div {

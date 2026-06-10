@@ -3,6 +3,7 @@ Pharmacy POS Dashboard — main application.
 Run with: python app.py
 Then open http://localhost:8050 in your browser.
 """
+import os
 import platform
 from datetime import date, datetime, timedelta
 
@@ -252,7 +253,10 @@ for _group in config.METRIC_GROUPS:
         if _meta.get("group") == _group:
             DROPDOWN_OPTIONS.append({"label": f"    {_name}", "value": _name})
 
+_LOGO_EXISTS = os.path.exists(os.path.join(os.path.dirname(os.path.abspath(__file__)), "assets", "logo.png"))
+
 app.layout = html.Div(
+    id="page-root",
     style={
         "backgroundColor": config.COLORS["background"],
         "minHeight": "100vh",
@@ -262,18 +266,39 @@ app.layout = html.Div(
     },
     children=[
         dcc.Interval(id="interval-refresh", interval=config.CACHE_TTL * 1000, n_intervals=0),
+        dcc.Store(id="theme-store", data="dark", storage_type="local"),
 
         # ── Header ──────────────────────────────────────────────────────────
-        html.Div([
-            html.H1(
-                "Point of Sale Summary",
-                style={"margin": "0", "fontSize": "28px", "fontWeight": "700",
-                       "color": config.COLORS["text"]},
-            ),
+        html.Div(id="app-header", children=[
             html.Div([
+                html.Img(src="/assets/logo.png", style={
+                    "height": "48px", "marginRight": "16px", "borderRadius": "6px",
+                }) if _LOGO_EXISTS else None,
+                html.Div([
+                    html.H1(
+                        "Priceline Pharmacy Pacific Fair",
+                        style={"margin": "0", "fontSize": "26px", "fontWeight": "700"},
+                    ),
+                    html.Div("Point of Sale Summary", style={
+                        "fontSize": "13px", "color": config.COLORS["text_muted"],
+                        "letterSpacing": "1px", "textTransform": "uppercase",
+                    }),
+                ]),
+            ], style={"display": "flex", "alignItems": "center"}),
+            html.Div([
+                html.Button("☀ / 🌙", id="theme-toggle", n_clicks=0, title="Switch light/dark theme", style={
+                    "backgroundColor": "transparent",
+                    "color": config.COLORS["text_muted"],
+                    "border": f"1px solid {config.COLORS['card_border']}",
+                    "borderRadius": "6px",
+                    "padding": "8px 12px",
+                    "cursor": "pointer",
+                    "marginRight": "12px",
+                    "fontSize": "13px",
+                }),
                 html.Button("Refresh Now", id="refresh-button", n_clicks=0, style={
                     "backgroundColor": config.COLORS["accent"],
-                    "color": config.COLORS["text"],
+                    "color": "#ffffff",
                     "border": f"1px solid {config.COLORS['card_border']}",
                     "borderRadius": "6px",
                     "padding": "8px 16px",
@@ -281,12 +306,9 @@ app.layout = html.Div(
                     "marginRight": "16px",
                     "fontSize": "13px",
                 }),
-                html.Span("Most Recent Data From: ", style={"color": config.COLORS["text_muted"],
-                                                             "fontSize": "14px"}),
-                html.Span(id="last-data-date", style={"color": config.COLORS["accent_light"],
-                                                       "fontWeight": "600", "fontSize": "14px"}),
-                html.Span(id="last-refresh-time", style={"color": config.COLORS["text_muted"],
-                                                          "fontSize": "12px", "marginLeft": "16px"}),
+                html.Span("Most Recent Data From: ", style={"fontSize": "14px"}),
+                html.Span(id="last-data-date", style={"fontWeight": "600", "fontSize": "14px"}),
+                html.Span(id="last-refresh-time", style={"fontSize": "12px", "marginLeft": "16px"}),
             ], style={"display": "flex", "alignItems": "center", "flexWrap": "wrap"}),
         ], style={
             "display": "flex",
@@ -396,6 +418,28 @@ def build_overview(all_data: dict):
     today = date.today()
     current_fy_month = data_module.get_fy_month(today)
 
+    def sparkline(metric_df):
+        """Tiny 90-day trend line (weekly totals to smooth noise)."""
+        cutoff = date.today() - timedelta(days=90)
+        sub = metric_df[metric_df["date"] >= cutoff].sort_values("date")
+        if len(sub) < 7:
+            return None
+        s = sub.set_index("date")["value"].rolling(7, min_periods=4).mean().dropna()
+        if s.empty:
+            return None
+        fig = go.Figure(go.Scatter(
+            x=list(s.index), y=list(s.values), mode="lines",
+            line=dict(color=config.COLORS["line_cy"], width=1.5),
+        ))
+        fig.update_layout(
+            margin=dict(l=0, r=0, t=2, b=0),
+            paper_bgcolor="rgba(0,0,0,0)", plot_bgcolor="rgba(0,0,0,0)",
+            xaxis=dict(visible=False), yaxis=dict(visible=False),
+            showlegend=False, height=42,
+        )
+        return dcc.Graph(figure=fig, config={"staticPlot": True},
+                         style={"height": "42px", "marginTop": "8px"})
+
     def metric_card(metric_name, meta):
         key = meta["key"]
         fmt = meta["format"]
@@ -425,6 +469,7 @@ def build_overview(all_data: dict):
                     "color": config.COLORS["positive"] if pct_pos else config.COLORS["negative"],
                 }),
             ]),
+            sparkline(metric_df),
         ], style={"flex": "1 1 200px", "minWidth": "180px", "padding": "16px"})
 
     sections = [
@@ -1104,6 +1149,16 @@ def build_report(all_data: dict, report_value: str):
 # Callbacks
 # ---------------------------------------------------------------------------
 @app.callback(
+    Output("theme-store", "data"),
+    Input("theme-toggle", "n_clicks"),
+    State("theme-store", "data"),
+    prevent_initial_call=True,
+)
+def toggle_theme(_clicks, current):
+    return "light" if current == "dark" else "dark"
+
+
+@app.callback(
     Output("main-content", "children"),
     Output("last-data-date", "children"),
     Output("last-refresh-time", "children"),
@@ -1112,6 +1167,8 @@ def build_report(all_data: dict, report_value: str):
     Output("report-container", "style"),
     Output("report-month-dropdown", "options"),
     Output("report-month-dropdown", "value"),
+    Output("page-root", "style"),
+    Output("page-root", "className"),
     Input("main-tabs", "value"),
     Input("metric-dropdown", "value"),
     Input("interval-refresh", "n_intervals"),
@@ -1119,10 +1176,22 @@ def build_report(all_data: dict, report_value: str):
     Input("date-range-picker", "start_date"),
     Input("date-range-picker", "end_date"),
     Input("report-month-dropdown", "value"),
+    Input("theme-store", "data"),
 )
-def update_dashboard(tab, metric_name, _n, _clicks, range_start, range_end, report_value):
+def update_dashboard(tab, metric_name, _n, _clicks, range_start, range_end, report_value, theme):
     ctx = dash.callback_context
     force = bool(ctx.triggered and ctx.triggered[0]["prop_id"].startswith("refresh-button"))
+
+    # Apply theme palette before building any content
+    config.COLORS = config.PALETTES.get(theme, config.PALETTES["dark"])
+    root_style = {
+        "backgroundColor": config.COLORS["background"],
+        "minHeight": "100vh",
+        "fontFamily": "'Segoe UI', 'Helvetica Neue', Arial, sans-serif",
+        "color": config.COLORS["text"],
+        "padding": "24px",
+    }
+    root_class = "theme-light" if theme == "light" else "theme-dark"
 
     all_data = data_module.get_all_data(force_refresh=force)
 
@@ -1137,7 +1206,7 @@ def update_dashboard(tab, metric_name, _n, _clicks, range_start, range_end, repo
 
     if all_data is None:
         return (setup_message(), "Not connected", "", dropdown_style,
-                range_style, report_style, [], None)
+                range_style, report_style, [], None, root_style, root_class)
 
     report_options = get_report_month_options(all_data)
     if report_value is None and report_options:
@@ -1172,7 +1241,8 @@ def update_dashboard(tab, metric_name, _n, _clicks, range_start, range_end, repo
         )
 
     return (content, date_str, refresh_str, dropdown_style,
-            range_style, report_style, report_options, report_value)
+            range_style, report_style, report_options, report_value,
+            root_style, root_class)
 
 
 # Browser print dialog (lets the user save the report as a PDF)

@@ -211,22 +211,42 @@ METRICS = {
 
 METRIC_GROUPS = ["Whole Shop", "Front Shop", "Dispensary"]
 
-COLORS = {
-    "background": "#1a1a2e",
-    "card": "#16213e",
-    "card_border": "#0f3460",
-    "accent": "#0f3460",
-    "accent_light": "#533483",
-    "text": "#ffffff",
-    "text_muted": "#a0a0b8",
-    "positive": "#00e676",
-    "negative": "#ff5252",
-    "line_cy": "#00b4d8",
-    "line_py": "#f4a261",
-    "line_2yr": "#e76f51",
-    "table_header": "#0f3460",
-    "table_row_alt": "#1a1a3e",
+PALETTES = {
+    "dark": {
+        "background": "#1a1a2e",
+        "card": "#16213e",
+        "card_border": "#0f3460",
+        "accent": "#0f3460",
+        "accent_light": "#533483",
+        "text": "#ffffff",
+        "text_muted": "#a0a0b8",
+        "positive": "#00e676",
+        "negative": "#ff5252",
+        "line_cy": "#00b4d8",
+        "line_py": "#f4a261",
+        "line_2yr": "#e76f51",
+        "table_header": "#0f3460",
+        "table_row_alt": "#1a1a3e",
+    },
+    "light": {
+        "background": "#f2f3f7",
+        "card": "#ffffff",
+        "card_border": "#d8dce6",
+        "accent": "#0f3460",
+        "accent_light": "#533483",
+        "text": "#1a1a2e",
+        "text_muted": "#5a5f73",
+        "positive": "#1a7d3c",
+        "negative": "#b00020",
+        "line_cy": "#0077b6",
+        "line_py": "#e08a3c",
+        "line_2yr": "#d04a2a",
+        "table_header": "#e8eaf2",
+        "table_row_alt": "#f4f5fa",
+    },
 }
+
+COLORS = PALETTES["dark"]
 
 FY_MONTH_LABELS = [
     "Jul", "Aug", "Sep", "Oct", "Nov", "Dec",
