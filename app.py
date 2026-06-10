@@ -901,10 +901,6 @@ def build_trends(metric_name: str, all_data: dict):
     ))
     dark_chart_layout(fig, title=f"{metric_name} — Rolling Trend (last 14 months)")
 
-    # Public holiday markers
-    if len(daily):
-        add_holiday_markers(fig, daily.index.min(), daily.index.max())
-
     # Optional target reference line (set in config.TARGETS)
     target = config.TARGETS.get(metric_name)
     if target:
@@ -915,13 +911,13 @@ def build_trends(metric_name: str, all_data: dict):
             annotation_font=dict(color=config.COLORS["positive"], size=11),
         )
 
-    # Anomalies: days more than 20% below the average of the prior 8 same weekdays
+    # Anomalies: days more than 30% below the average of the prior 8 same weekdays
     anom_x, anom_y = [], []
     work = metric_df[metric_df["date"] >= cutoff].sort_values("date").copy()
     work["weekday"] = work["date"].apply(lambda d: d.weekday())
     for _, grp in work.groupby("weekday"):
         baseline = grp["value"].rolling(8, min_periods=4).mean().shift(1)
-        flags = grp["value"] < baseline * 0.8
+        flags = grp["value"] < baseline * 0.7
         for (_, row), flag in zip(grp.iterrows(), flags):
             if flag:
                 anom_x.append(row["date"])
