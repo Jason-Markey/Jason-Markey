@@ -122,7 +122,7 @@ METRICS = {
         "aggregation": "average",
         "group": "Front Shop",
     },
-    "Total Customers": {
+    "Total Customer Number": {
         "key": "tot_cust",
         "source": "front_shop",
         "format": "number",
