@@ -491,8 +491,13 @@ def build_overview(all_data: dict):
         agg = meta["aggregation"]
         metric_df = data_module.get_metric_data(all_data, key)
 
+        # Cap prior years at this metric's most recent uploaded date, not today
+        cy_dates = metric_df[metric_df["fy_year"] == current_fy]["date"]
+        ref_date = cy_dates.max() if not cy_dates.empty else today
+        ref_fy_month = data_module.get_fy_month(ref_date)
+
         ytd_cy = get_ytd(metric_df, agg, current_fy)
-        ytd_py = get_ytd_to_month(metric_df, agg, prior_fy, current_fy_month, today.day) if prior_fy else None
+        ytd_py = get_ytd_to_month(metric_df, agg, prior_fy, ref_fy_month, ref_date.day) if prior_fy else None
         pct = None
         if ytd_cy is not None and ytd_py and ytd_py != 0:
             pct = (ytd_cy - ytd_py) / ytd_py * 100
@@ -560,12 +565,15 @@ def build_detail(metric_name: str, all_data: dict):
     metric_df = data_module.get_metric_data(all_data, key)
 
     today = date.today()
-    current_fy_month = data_module.get_fy_month(today)
+    # Cap prior years at the most recent uploaded date for this metric, not today
+    cy_dates = metric_df[metric_df["fy_year"] == current_fy]["date"]
+    ref_date = cy_dates.max() if not cy_dates.empty else today
+    current_fy_month = data_module.get_fy_month(ref_date)
 
     # ── YTD values ────────────────────────────────────────────────────────
     ytd_cy = get_ytd(metric_df, agg, current_fy)
-    ytd_py = get_ytd_to_month(metric_df, agg, prior_fy, current_fy_month, today.day) if prior_fy else None
-    ytd_2yr = get_ytd_to_month(metric_df, agg, two_yr_fy, current_fy_month, today.day) if two_yr_fy else None
+    ytd_py = get_ytd_to_month(metric_df, agg, prior_fy, current_fy_month, ref_date.day) if prior_fy else None
+    ytd_2yr = get_ytd_to_month(metric_df, agg, two_yr_fy, current_fy_month, ref_date.day) if two_yr_fy else None
 
     diff_py = (ytd_cy - ytd_py) if (ytd_cy is not None and ytd_py is not None) else None
     diff_2yr = (ytd_cy - ytd_2yr) if (ytd_cy is not None and ytd_2yr is not None) else None
@@ -578,7 +586,7 @@ def build_detail(metric_name: str, all_data: dict):
     pct_2yr_str, pct_2yr_pos = fmt_pct(pct_2yr)
 
     # ── MTD values (current month vs same month PY, capped at same day) ──
-    max_day = today.day
+    max_day = ref_date.day
     mtd_cy = get_mtd(metric_df, agg, current_fy, current_fy_month)
     mtd_py = get_mtd(metric_df, agg, prior_fy, current_fy_month, max_day) if prior_fy else None
     mtd_2yr = get_mtd(metric_df, agg, two_yr_fy, current_fy_month, max_day) if two_yr_fy else None
@@ -593,7 +601,7 @@ def build_detail(metric_name: str, all_data: dict):
     mtd_pct_py_str, mtd_pct_py_pos = fmt_pct(mtd_pct_py)
     mtd_pct_2yr_str, mtd_pct_2yr_pos = fmt_pct(mtd_pct_2yr)
 
-    month_name = today.strftime("%B")
+    month_name = ref_date.strftime("%B")
 
     # ── Last 10 days ──────────────────────────────────────────────────────
     cy_df = metric_df[metric_df["fy_year"] == current_fy].sort_values("date", ascending=False)
