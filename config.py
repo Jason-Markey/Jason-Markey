@@ -122,6 +122,13 @@ METRICS = {
         "aggregation": "average",
         "group": "Front Shop",
     },
+    "Total Customers": {
+        "key": "tot_cust",
+        "source": "front_shop",
+        "format": "number",
+        "aggregation": "sum",
+        "group": "Front Shop",
+    },
     # ── Dispensary ──────────────────────────────────────────────────────
     "Dispensary Sales": {
         "key": "non_tax_sales",
