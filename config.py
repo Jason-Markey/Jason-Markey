@@ -93,6 +93,13 @@ METRICS = {
         "aggregation": "sum",
         "group": "Whole Shop",
     },
+    "Total Customer Number": {
+        "key": "tot_cust",
+        "source": "front_shop",
+        "format": "number",
+        "aggregation": "sum",
+        "group": "Whole Shop",
+    },
     # ── Front Shop ──────────────────────────────────────────────────────
     "Click & Collect": {
         "key": "click_collect",
@@ -119,13 +126,6 @@ METRICS = {
         "key": "club_sales",
         "source": "front_shop",
         "format": "currency",
-        "aggregation": "sum",
-        "group": "Front Shop",
-    },
-    "Total Customer Number": {
-        "key": "tot_cust",
-        "source": "front_shop",
-        "format": "number",
         "aggregation": "sum",
         "group": "Front Shop",
     },
