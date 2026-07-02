@@ -12,6 +12,9 @@ CACHE_TTL = 300  # 5 minutes
 # Source tabs
 FRONT_SHOP_TAB = "FRONT SHOP DETAILS"
 DISPENSARY_TAB = "DISPENSARY DETAILS"
+# Optional read-only tab holding backfilled historical days (same layout as
+# FRONT SHOP DETAILS). Details tabs always win if a date exists in both.
+HISTORY_TAB = "DASHBOARD HISTORY"
 
 # Front Shop Details columns (0-based, row 1 = headers, row 2+ = data)
 FS_COLS = {

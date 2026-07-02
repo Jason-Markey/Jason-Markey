@@ -126,6 +126,21 @@ def load_all_data(client, spreadsheet_name=None):
         print(f"Warning: could not load Front Shop Details: {exc}")
         fs_df = pd.DataFrame()
 
+    # Optional history tab with backfilled old days (same layout as Front Shop).
+    # Details rows always take precedence over history rows for the same date.
+    try:
+        hist_df = _load_tab(client, ss_name, config.HISTORY_TAB, config.FS_COLS)
+        if not hist_df.empty:
+            if not fs_df.empty:
+                hist_df = hist_df[~hist_df["date"].isin(set(fs_df["date"]))]
+                fs_df = pd.concat([hist_df, fs_df], ignore_index=True)
+                fs_df.sort_values("date", inplace=True)
+                fs_df.reset_index(drop=True, inplace=True)
+            else:
+                fs_df = hist_df
+    except Exception:
+        pass  # tab may not exist — that's fine
+
     try:
         disp_df = _load_tab(client, ss_name, config.DISPENSARY_TAB, config.DISP_COLS)
     except Exception as exc:
