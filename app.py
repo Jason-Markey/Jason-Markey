@@ -367,6 +367,8 @@ app.layout = html.Div(
                         style=TAB_STYLE, selected_style=TAB_SELECTED_STYLE),
                 dcc.Tab(label="Day of Week", value="tab-dow",
                         style=TAB_STYLE, selected_style=TAB_SELECTED_STYLE),
+                dcc.Tab(label="Monthly Compare", value="tab-mcomp",
+                        style=TAB_STYLE, selected_style=TAB_SELECTED_STYLE),
                 dcc.Tab(label="Custom Range", value="tab-range",
                         style=TAB_STYLE, selected_style=TAB_SELECTED_STYLE),
                 dcc.Tab(label="Monthly Report", value="tab-report",
@@ -463,6 +465,20 @@ app.layout = html.Div(
                 className="metric-dropdown",
             ),
         ], id="dow-container", style={"display": "none"}),
+
+        # ── Year picker (Monthly Compare tab only) ─────────────────────────
+        html.Div([
+            html.Label("Years to Show", style={"color": config.COLORS["text_muted"],
+                                               "fontSize": "13px", "marginBottom": "6px",
+                                               "display": "block"}),
+            dcc.Dropdown(
+                id="mcomp-years-dropdown",
+                multi=True,
+                style={"width": "380px", "maxWidth": "100%",
+                       "color": "#000000", "backgroundColor": "#ffffff"},
+                className="metric-dropdown",
+            ),
+        ], id="mcomp-container", style={"display": "none"}),
 
         # ── Year pickers (Year in Review tab only) ────────────────────────
         html.Div([
@@ -1177,6 +1193,73 @@ def build_dow(metric_name: str, all_data: dict, selected_fys=None):
 
 
 # ---------------------------------------------------------------------------
+# Monthly Compare tab — months on the x-axis, one bar series per FY
+# ---------------------------------------------------------------------------
+def build_month_compare(metric_name: str, all_data: dict, selected_fys=None):
+    meta = config.METRICS[metric_name]
+    key = meta["key"]
+    fmt = meta["format"]
+    agg = meta["aggregation"]
+
+    current_fy = data_module.get_current_fy()
+    prior_fy = data_module.get_prior_fy(current_fy, 1)
+
+    metric_df = data_module.get_metric_data(all_data, key)
+    if metric_df.empty:
+        return html.Div("No data available.", style={"color": config.COLORS["text_muted"]})
+
+    if not selected_fys:
+        selected_fys = [fy for fy in (current_fy, prior_fy) if fy]
+    # Oldest first so the newest year is drawn last in each month group
+    selected_fys = sorted(set(selected_fys), key=lambda f: int(f.split("/")[0]))
+
+    months = list(range(1, 13))
+    bar_colors = [config.COLORS["line_4yr"], config.COLORS["line_3yr"],
+                  config.COLORS["line_2yr"], config.COLORS["line_py"],
+                  config.COLORS["line_cy"]]
+    n = len(selected_fys)
+    colors_for = bar_colors[-n:] if n <= len(bar_colors) else bar_colors * ((n // len(bar_colors)) + 1)
+
+    fig = go.Figure()
+    monthly_by_fy = {}
+    for fy_label, colr in zip(selected_fys, colors_for):
+        monthly = aggregate_monthly(metric_df[metric_df["fy_year"] == fy_label], agg)
+        monthly_by_fy[fy_label] = monthly
+        fig.add_trace(go.Bar(
+            x=MONTH_LABELS, y=[monthly.get(m, None) for m in months],
+            name=fy_label, marker_color=colr,
+        ))
+    label = "Average" if agg == "average" else "Total"
+    dark_chart_layout(fig, title=f"{metric_name} — Monthly {label} by Year")
+    fig.update_layout(barmode="group", hovermode="x")
+
+    # Best / worst month callout for the newest selected year
+    newest = selected_fys[-1]
+    newest_monthly = monthly_by_fy[newest]
+    valid = [(MONTH_LABELS[m - 1], newest_monthly.get(m)) for m in months
+             if newest_monthly.get(m) is not None]
+    callout = []
+    if valid:
+        best = max(valid, key=lambda t: t[1])
+        worst = min(valid, key=lambda t: t[1])
+        callout = [html.Div([
+            html.Span(f"Best month ({newest}): ", style={"color": config.COLORS["text_muted"], "fontSize": "13px"}),
+            html.Span(f"{best[0]} ({fmt_value(best[1], fmt)})", style={
+                "color": config.COLORS["positive"], "fontWeight": "600", "fontSize": "13px",
+                "marginRight": "24px",
+            }),
+            html.Span("Quietest month: ", style={"color": config.COLORS["text_muted"], "fontSize": "13px"}),
+            html.Span(f"{worst[0]} ({fmt_value(worst[1], fmt)})", style={
+                "color": config.COLORS["negative"], "fontWeight": "600", "fontSize": "13px",
+            }),
+        ], style={"marginTop": "12px"})]
+
+    return card([
+        dcc.Graph(figure=fig, config=GRAPH_CONFIG, style={"height": "420px"}),
+    ] + callout)
+
+
+# ---------------------------------------------------------------------------
 # Custom Range tab
 # ---------------------------------------------------------------------------
 def _shift_year(d, years):
@@ -1779,6 +1862,9 @@ def toggle_theme(_clicks, current):
     Output("dow-container", "style"),
     Output("dow-years-dropdown", "options"),
     Output("dow-years-dropdown", "value"),
+    Output("mcomp-container", "style"),
+    Output("mcomp-years-dropdown", "options"),
+    Output("mcomp-years-dropdown", "value"),
     Output("page-root", "style"),
     Output("page-root", "className"),
     Input("main-tabs", "value"),
@@ -1792,10 +1878,12 @@ def toggle_theme(_clicks, current):
     Input("year-a-dropdown", "value"),
     Input("year-b-dropdown", "value"),
     Input("dow-years-dropdown", "value"),
+    Input("mcomp-years-dropdown", "value"),
     Input("theme-store", "data"),
 )
 def update_dashboard(tab, metric_name, _n, _clicks, range_start, range_end,
-                     report_value, month_value, year_a, year_b, dow_years, theme):
+                     report_value, month_value, year_a, year_b, dow_years,
+                     mcomp_years, theme):
     ctx = dash.callback_context
     force = bool(ctx.triggered and ctx.triggered[0]["prop_id"].startswith("refresh-button"))
 
@@ -1825,13 +1913,15 @@ def update_dashboard(tab, metric_name, _n, _clicks, range_start, range_end,
                    "flexWrap": "wrap", "alignItems": "flex-end"}
                   if tab == "tab-year" else hidden)
     dow_style = {"marginBottom": "24px"} if tab == "tab-dow" else hidden
+    mcomp_style = {"marginBottom": "24px"} if tab == "tab-mcomp" else hidden
 
     if all_data is None:
         return (setup_message(), "Not connected", "", dropdown_style,
                 range_style, report_style, [], None,
                 month_style, [], None,
                 year_style, [], None, [], None,
-                dow_style, [], None, root_style, root_class)
+                dow_style, [], None,
+                mcomp_style, [], None, root_style, root_class)
 
     report_options = get_report_month_options(all_data)
     if report_value is None and report_options:
@@ -1849,6 +1939,8 @@ def update_dashboard(tab, metric_name, _n, _clicks, range_start, range_end,
 
     if not dow_years and fy_options:
         dow_years = [o["value"] for o in fy_options[:2]]
+    if not mcomp_years and fy_options:
+        mcomp_years = [o["value"] for o in fy_options[:2]]
 
     current_fy = data_module.get_current_fy()
     cy_df = all_data.get(current_fy, pd.DataFrame())
@@ -1866,6 +1958,8 @@ def update_dashboard(tab, metric_name, _n, _clicks, range_start, range_end,
             content = build_trends(metric_name, all_data)
         elif tab == "tab-dow":
             content = build_dow(metric_name, all_data, dow_years)
+        elif tab == "tab-mcomp":
+            content = build_month_compare(metric_name, all_data, mcomp_years)
         elif tab == "tab-range":
             content = build_range(metric_name, all_data, range_start, range_end)
         elif tab == "tab-report":
@@ -1887,6 +1981,7 @@ def update_dashboard(tab, metric_name, _n, _clicks, range_start, range_end,
             month_style, report_options, month_value,
             year_style, fy_options, year_a, fy_options, year_b,
             dow_style, fy_options, dow_years,
+            mcomp_style, fy_options, mcomp_years,
             root_style, root_class)
 
 
