@@ -618,6 +618,7 @@ def build_detail(metric_name: str, all_data: dict):
     prior_fy = data_module.get_prior_fy(current_fy, 1)
     two_yr_fy = data_module.get_prior_fy(current_fy, 2)
     three_yr_fy = data_module.get_prior_fy(current_fy, 3)
+    four_yr_fy = data_module.get_prior_fy(current_fy, 4)
 
     metric_df = data_module.get_metric_data(all_data, key)
 
@@ -632,20 +633,25 @@ def build_detail(metric_name: str, all_data: dict):
     ytd_py = get_ytd_to_month(metric_df, agg, prior_fy, current_fy_month, ref_date.day) if prior_fy else None
     ytd_2yr = get_ytd_to_month(metric_df, agg, two_yr_fy, current_fy_month, ref_date.day) if two_yr_fy else None
     ytd_3yr = get_ytd_to_month(metric_df, agg, three_yr_fy, current_fy_month, ref_date.day) if three_yr_fy else None
+    ytd_4yr = get_ytd_to_month(metric_df, agg, four_yr_fy, current_fy_month, ref_date.day) if four_yr_fy else None
 
     diff_py = (ytd_cy - ytd_py) if (ytd_cy is not None and ytd_py is not None) else None
     diff_2yr = (ytd_cy - ytd_2yr) if (ytd_cy is not None and ytd_2yr is not None) else None
     diff_3yr = (ytd_cy - ytd_3yr) if (ytd_cy is not None and ytd_3yr is not None) else None
+    diff_4yr = (ytd_cy - ytd_4yr) if (ytd_cy is not None and ytd_4yr is not None) else None
     pct_py = (diff_py / ytd_py * 100) if (diff_py is not None and ytd_py and ytd_py != 0) else None
     pct_2yr = (diff_2yr / ytd_2yr * 100) if (diff_2yr is not None and ytd_2yr and ytd_2yr != 0) else None
     pct_3yr = (diff_3yr / ytd_3yr * 100) if (diff_3yr is not None and ytd_3yr and ytd_3yr != 0) else None
+    pct_4yr = (diff_4yr / ytd_4yr * 100) if (diff_4yr is not None and ytd_4yr and ytd_4yr != 0) else None
 
     diff_py_str, diff_py_pos = fmt_diff(diff_py, fmt)
     diff_2yr_str, diff_2yr_pos = fmt_diff(diff_2yr, fmt)
     diff_3yr_str, diff_3yr_pos = fmt_diff(diff_3yr, fmt)
+    diff_4yr_str, diff_4yr_pos = fmt_diff(diff_4yr, fmt)
     pct_py_str, pct_py_pos = fmt_pct(pct_py)
     pct_2yr_str, pct_2yr_pos = fmt_pct(pct_2yr)
     pct_3yr_str, pct_3yr_pos = fmt_pct(pct_3yr)
+    pct_4yr_str, pct_4yr_pos = fmt_pct(pct_4yr)
 
     # ── MTD values (current month vs same month PY, capped at same day) ──
     max_day = ref_date.day
@@ -653,20 +659,25 @@ def build_detail(metric_name: str, all_data: dict):
     mtd_py = get_mtd(metric_df, agg, prior_fy, current_fy_month, max_day) if prior_fy else None
     mtd_2yr = get_mtd(metric_df, agg, two_yr_fy, current_fy_month, max_day) if two_yr_fy else None
     mtd_3yr = get_mtd(metric_df, agg, three_yr_fy, current_fy_month, max_day) if three_yr_fy else None
+    mtd_4yr = get_mtd(metric_df, agg, four_yr_fy, current_fy_month, max_day) if four_yr_fy else None
 
     mtd_diff_py = (mtd_cy - mtd_py) if (mtd_cy is not None and mtd_py is not None) else None
     mtd_diff_2yr = (mtd_cy - mtd_2yr) if (mtd_cy is not None and mtd_2yr is not None) else None
     mtd_diff_3yr = (mtd_cy - mtd_3yr) if (mtd_cy is not None and mtd_3yr is not None) else None
+    mtd_diff_4yr = (mtd_cy - mtd_4yr) if (mtd_cy is not None and mtd_4yr is not None) else None
     mtd_pct_py = (mtd_diff_py / mtd_py * 100) if (mtd_diff_py is not None and mtd_py and mtd_py != 0) else None
     mtd_pct_2yr = (mtd_diff_2yr / mtd_2yr * 100) if (mtd_diff_2yr is not None and mtd_2yr and mtd_2yr != 0) else None
     mtd_pct_3yr = (mtd_diff_3yr / mtd_3yr * 100) if (mtd_diff_3yr is not None and mtd_3yr and mtd_3yr != 0) else None
+    mtd_pct_4yr = (mtd_diff_4yr / mtd_4yr * 100) if (mtd_diff_4yr is not None and mtd_4yr and mtd_4yr != 0) else None
 
     mtd_diff_py_str, mtd_diff_py_pos = fmt_diff(mtd_diff_py, fmt)
     mtd_diff_2yr_str, mtd_diff_2yr_pos = fmt_diff(mtd_diff_2yr, fmt)
     mtd_diff_3yr_str, mtd_diff_3yr_pos = fmt_diff(mtd_diff_3yr, fmt)
+    mtd_diff_4yr_str, mtd_diff_4yr_pos = fmt_diff(mtd_diff_4yr, fmt)
     mtd_pct_py_str, mtd_pct_py_pos = fmt_pct(mtd_pct_py)
     mtd_pct_2yr_str, mtd_pct_2yr_pos = fmt_pct(mtd_pct_2yr)
     mtd_pct_3yr_str, mtd_pct_3yr_pos = fmt_pct(mtd_pct_3yr)
+    mtd_pct_4yr_str, mtd_pct_4yr_pos = fmt_pct(mtd_pct_4yr)
 
     month_name = ref_date.strftime("%B")
 
@@ -681,6 +692,7 @@ def build_detail(metric_name: str, all_data: dict):
     py_monthly = aggregate_monthly(metric_df[metric_df["fy_year"] == prior_fy], agg) if prior_fy else pd.Series(dtype=float)
     twoyr_monthly = aggregate_monthly(metric_df[metric_df["fy_year"] == two_yr_fy], agg) if two_yr_fy else pd.Series(dtype=float)
     threeyr_monthly = aggregate_monthly(metric_df[metric_df["fy_year"] == three_yr_fy], agg) if three_yr_fy else pd.Series(dtype=float)
+    fouryr_monthly = aggregate_monthly(metric_df[metric_df["fy_year"] == four_yr_fy], agg) if four_yr_fy else pd.Series(dtype=float)
 
     months = list(range(1, 13))
 
@@ -720,6 +732,14 @@ def build_detail(metric_name: str, all_data: dict):
             line=dict(color=config.COLORS["line_3yr"], width=2),
             marker=dict(size=5), connectgaps=False,
         ))
+    if four_yr_fy and not fouryr_monthly.empty:
+        fig.add_trace(go.Scatter(
+            x=MONTH_LABELS,
+            y=[safe_get(fouryr_monthly, m) for m in months],
+            mode="lines+markers", name=four_yr_fy,
+            line=dict(color=config.COLORS["line_4yr"], width=2),
+            marker=dict(size=5), connectgaps=False,
+        ))
     dark_chart_layout(fig, title=metric_name)
 
     # ── Comparison table rows ─────────────────────────────────────────────
@@ -750,9 +770,11 @@ def build_detail(metric_name: str, all_data: dict):
     diffs_py = diff_vals(cy_monthly, py_monthly)
     diffs_2yr = diff_vals(cy_monthly, twoyr_monthly)
     diffs_3yr = diff_vals(cy_monthly, threeyr_monthly)
+    diffs_4yr = diff_vals(cy_monthly, fouryr_monthly)
     pcts_py = pct_vals(diffs_py, py_monthly)
     pcts_2yr = pct_vals(diffs_2yr, twoyr_monthly)
     pcts_3yr = pct_vals(diffs_3yr, threeyr_monthly)
+    pcts_4yr = pct_vals(diffs_4yr, fouryr_monthly)
 
     def color_cells(vals):
         colors = []
@@ -783,20 +805,25 @@ def build_detail(metric_name: str, all_data: dict):
         "PY": row_vals(py_monthly),
         "-2 Yr": row_vals(twoyr_monthly),
         "-3 Yr": row_vals(threeyr_monthly),
+        "-4 Yr": row_vals(fouryr_monthly),
         "vs PY": arrow_fmt(diffs_py),
         "vs -2yr": arrow_fmt(diffs_2yr),
         "vs -3yr": arrow_fmt(diffs_3yr),
+        "vs -4yr": arrow_fmt(diffs_4yr),
         "vs PY%": arrow_fmt(pcts_py, is_pct=True),
         "vs -2yr%": arrow_fmt(pcts_2yr, is_pct=True),
         "vs -3yr%": arrow_fmt(pcts_3yr, is_pct=True),
+        "vs -4yr%": arrow_fmt(pcts_4yr, is_pct=True),
     }
     color_map = {
         "vs PY": color_cells(diffs_py),
         "vs -2yr": color_cells(diffs_2yr),
         "vs -3yr": color_cells(diffs_3yr),
+        "vs -4yr": color_cells(diffs_4yr),
         "vs PY%": color_cells(pcts_py),
         "vs -2yr%": color_cells(pcts_2yr),
         "vs -3yr%": color_cells(pcts_3yr),
+        "vs -4yr%": color_cells(pcts_4yr),
     }
 
     def make_table_row(label, values, cell_colors=None):
@@ -862,6 +889,8 @@ def build_detail(metric_name: str, all_data: dict):
                                 diff_2yr_str, diff_2yr_pos, pct_2yr_str, pct_2yr_pos),
                 comparison_line(f"vs {three_yr_fy} YTD" if three_yr_fy else "vs -3yr",
                                 diff_3yr_str, diff_3yr_pos, pct_3yr_str, pct_3yr_pos),
+                comparison_line(f"vs {four_yr_fy} YTD" if four_yr_fy else "vs -4yr",
+                                diff_4yr_str, diff_4yr_pos, pct_4yr_str, pct_4yr_pos),
             ], style={"flex": "1 1 300px", "minWidth": "280px"}),
 
             card([
@@ -885,6 +914,8 @@ def build_detail(metric_name: str, all_data: dict):
                                 mtd_diff_2yr_str, mtd_diff_2yr_pos, mtd_pct_2yr_str, mtd_pct_2yr_pos),
                 comparison_line(f"vs {three_yr_fy} MTD" if three_yr_fy else "vs -3yr",
                                 mtd_diff_3yr_str, mtd_diff_3yr_pos, mtd_pct_3yr_str, mtd_pct_3yr_pos),
+                comparison_line(f"vs {four_yr_fy} MTD" if four_yr_fy else "vs -4yr",
+                                mtd_diff_4yr_str, mtd_diff_4yr_pos, mtd_pct_4yr_str, mtd_pct_4yr_pos),
             ], style={"flex": "1 1 300px", "minWidth": "280px"}),
 
         ], style={"display": "flex", "flexWrap": "wrap", "gap": "20px", "marginBottom": "24px"}),
@@ -1104,8 +1135,9 @@ def build_dow(metric_name: str, all_data: dict, selected_fys=None):
         means = sub.groupby("weekday")["value"].mean()
         return [means.get(i, None) for i in range(7)]
 
-    bar_colors = [config.COLORS["line_3yr"], config.COLORS["line_2yr"],
-                  config.COLORS["line_py"], config.COLORS["line_cy"]]
+    bar_colors = [config.COLORS["line_4yr"], config.COLORS["line_3yr"],
+                  config.COLORS["line_2yr"], config.COLORS["line_py"],
+                  config.COLORS["line_cy"]]
     # Newest year always gets the CY colour, working backwards for older years
     n = len(selected_fys)
     colors_for = bar_colors[-n:] if n <= len(bar_colors) else bar_colors * ((n // len(bar_colors)) + 1)
@@ -1182,6 +1214,8 @@ def build_range(metric_name: str, all_data: dict, start, end):
     val_py, sub_py = range_value(py_start, py_end)
     two_start, two_end = _shift_year(start, 2), _shift_year(end, 2)
     val_2yr, sub_2yr = range_value(two_start, two_end)
+    three_start, three_end = _shift_year(start, 3), _shift_year(end, 3)
+    val_3yr, sub_3yr = range_value(three_start, three_end)
 
     diff = (val_cy - val_py) if (val_cy is not None and val_py is not None) else None
     pct = (diff / val_py * 100) if (diff is not None and val_py and val_py != 0) else None
@@ -1192,6 +1226,11 @@ def build_range(metric_name: str, all_data: dict, start, end):
     pct2 = (diff2 / val_2yr * 100) if (diff2 is not None and val_2yr and val_2yr != 0) else None
     diff2_str, diff2_pos = fmt_diff(diff2, fmt)
     pct2_str, pct2_pos = fmt_pct(pct2)
+
+    diff3 = (val_cy - val_3yr) if (val_cy is not None and val_3yr is not None) else None
+    pct3 = (diff3 / val_3yr * 100) if (diff3 is not None and val_3yr and val_3yr != 0) else None
+    diff3_str, diff3_pos = fmt_diff(diff3, fmt)
+    pct3_str, pct3_pos = fmt_pct(pct3)
 
     # Daily chart for the selected range, with the same range last year overlaid
     fig = go.Figure()
@@ -1219,6 +1258,14 @@ def build_range(metric_name: str, all_data: dict, start, end):
             mode="lines+markers", name="Same dates 2 years ago",
             line=dict(color=config.COLORS["line_2yr"], width=2, dash="dot"), marker=dict(size=4),
         ))
+    if not sub_3yr.empty:
+        p3 = sub_3yr.sort_values("date").copy()
+        p3["date_aligned"] = p3["date"].apply(lambda d: _shift_year(d, -3))
+        fig.add_trace(go.Scatter(
+            x=list(p3["date_aligned"]), y=list(p3["value"]),
+            mode="lines+markers", name="Same dates 3 years ago",
+            line=dict(color=config.COLORS["line_3yr"], width=2, dash="dot"), marker=dict(size=4),
+        ))
     dark_chart_layout(fig, title=f"{metric_name} — {fmt_date(start)} to {fmt_date(end)}")
     add_holiday_markers(fig, start, end)
 
@@ -1242,10 +1289,17 @@ def build_range(metric_name: str, all_data: dict, start, end):
                     f"vs {fmt_date(two_start)}–{fmt_date(two_end)}",
                     diff2_str, diff2_pos, pct2_str, pct2_pos,
                 ),
+                comparison_line(
+                    f"vs {fmt_date(three_start)}–{fmt_date(three_end)}",
+                    diff3_str, diff3_pos, pct3_str, pct3_pos,
+                ),
                 html.Div(f"Last year: {fmt_value(val_py, fmt)}", style={
                     "fontSize": "13px", "color": config.COLORS["text_muted"],
                 }),
                 html.Div(f"Two years ago: {fmt_value(val_2yr, fmt)}", style={
+                    "fontSize": "13px", "color": config.COLORS["text_muted"],
+                }),
+                html.Div(f"Three years ago: {fmt_value(val_3yr, fmt)}", style={
                     "fontSize": "13px", "color": config.COLORS["text_muted"],
                 }),
             ], style={"flex": "1 1 300px", "minWidth": "280px"}),
@@ -1273,6 +1327,7 @@ def build_month_detail(metric_name: str, all_data: dict, month_value: str):
     prior_fy = data_module.get_prior_fy(fy, 1)
     two_yr_fy = data_module.get_prior_fy(fy, 2)
     three_yr_fy = data_module.get_prior_fy(fy, 3)
+    four_yr_fy = data_module.get_prior_fy(fy, 4)
 
     month_label = MONTH_LABELS[m - 1]
     start_yy = int(fy.split("/")[0])
@@ -1297,6 +1352,7 @@ def build_month_detail(metric_name: str, all_data: dict, month_value: str):
     py_days = month_days(prior_fy)
     twoyr_days = month_days(two_yr_fy)
     threeyr_days = month_days(three_yr_fy)
+    fouryr_days = month_days(four_yr_fy)
 
     days = list(range(1, 32))
 
@@ -1328,6 +1384,12 @@ def build_month_detail(metric_name: str, all_data: dict, month_value: str):
             line=dict(color=config.COLORS["line_3yr"], width=2),
             marker=dict(size=5), connectgaps=False,
         ))
+    if four_yr_fy and not fouryr_days.empty:
+        fig.add_trace(go.Scatter(
+            x=days, y=y_for(fouryr_days), mode="lines+markers", name=four_yr_fy,
+            line=dict(color=config.COLORS["line_4yr"], width=2),
+            marker=dict(size=5), connectgaps=False,
+        ))
     dark_chart_layout(fig, title=f"{metric_name} — {month_label} {year} by day")
     fig.update_xaxes(dtick=1, title_text="Day of month")
 
@@ -1340,6 +1402,7 @@ def build_month_detail(metric_name: str, all_data: dict, month_value: str):
             (prior_fy, py_days, config.COLORS["line_py"], 2),
             (two_yr_fy, twoyr_days, config.COLORS["line_2yr"], 2),
             (three_yr_fy, threeyr_days, config.COLORS["line_3yr"], 2),
+            (four_yr_fy, fouryr_days, config.COLORS["line_4yr"], 2),
         ]:
             if not label or series.empty:
                 continue
