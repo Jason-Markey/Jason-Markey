@@ -361,6 +361,8 @@ app.layout = html.Div(
                         style=TAB_STYLE, selected_style=TAB_SELECTED_STYLE),
                 dcc.Tab(label="Month Detail", value="tab-month",
                         style=TAB_STYLE, selected_style=TAB_SELECTED_STYLE),
+                dcc.Tab(label="FY Comparison", value="tab-year",
+                        style=TAB_STYLE, selected_style=TAB_SELECTED_STYLE),
                 dcc.Tab(label="Trends", value="tab-trends",
                         style=TAB_STYLE, selected_style=TAB_SELECTED_STYLE),
                 dcc.Tab(label="Day of Week", value="tab-dow",
@@ -368,8 +370,6 @@ app.layout = html.Div(
                 dcc.Tab(label="Custom Range", value="tab-range",
                         style=TAB_STYLE, selected_style=TAB_SELECTED_STYLE),
                 dcc.Tab(label="Monthly Report", value="tab-report",
-                        style=TAB_STYLE, selected_style=TAB_SELECTED_STYLE),
-                dcc.Tab(label="Year in Review", value="tab-year",
                         style=TAB_STYLE, selected_style=TAB_SELECTED_STYLE),
             ],
             style={"marginBottom": "20px"},
@@ -476,10 +476,22 @@ app.layout = html.Div(
                     className="metric-dropdown",
                 ),
             ]),
+            html.Button("Print / Save as PDF", id="year-print-button", n_clicks=0, style={
+                "backgroundColor": config.COLORS["accent_light"],
+                "color": config.COLORS["text"],
+                "border": "none",
+                "borderRadius": "6px",
+                "padding": "10px 20px",
+                "cursor": "pointer",
+                "fontSize": "13px",
+                "fontWeight": "600",
+                "alignSelf": "flex-end",
+            }),
         ], id="year-container", style={"display": "none"}),
 
         html.Div(id="main-content"),
         html.Div(id="print-dummy", style={"display": "none"}),
+        html.Div(id="print-dummy-2", style={"display": "none"}),
     ],
 )
 
@@ -626,16 +638,21 @@ def build_detail(metric_name: str, all_data: dict):
     mtd_cy = get_mtd(metric_df, agg, current_fy, current_fy_month)
     mtd_py = get_mtd(metric_df, agg, prior_fy, current_fy_month, max_day) if prior_fy else None
     mtd_2yr = get_mtd(metric_df, agg, two_yr_fy, current_fy_month, max_day) if two_yr_fy else None
+    mtd_3yr = get_mtd(metric_df, agg, three_yr_fy, current_fy_month, max_day) if three_yr_fy else None
 
     mtd_diff_py = (mtd_cy - mtd_py) if (mtd_cy is not None and mtd_py is not None) else None
     mtd_diff_2yr = (mtd_cy - mtd_2yr) if (mtd_cy is not None and mtd_2yr is not None) else None
+    mtd_diff_3yr = (mtd_cy - mtd_3yr) if (mtd_cy is not None and mtd_3yr is not None) else None
     mtd_pct_py = (mtd_diff_py / mtd_py * 100) if (mtd_diff_py is not None and mtd_py and mtd_py != 0) else None
     mtd_pct_2yr = (mtd_diff_2yr / mtd_2yr * 100) if (mtd_diff_2yr is not None and mtd_2yr and mtd_2yr != 0) else None
+    mtd_pct_3yr = (mtd_diff_3yr / mtd_3yr * 100) if (mtd_diff_3yr is not None and mtd_3yr and mtd_3yr != 0) else None
 
     mtd_diff_py_str, mtd_diff_py_pos = fmt_diff(mtd_diff_py, fmt)
     mtd_diff_2yr_str, mtd_diff_2yr_pos = fmt_diff(mtd_diff_2yr, fmt)
+    mtd_diff_3yr_str, mtd_diff_3yr_pos = fmt_diff(mtd_diff_3yr, fmt)
     mtd_pct_py_str, mtd_pct_py_pos = fmt_pct(mtd_pct_py)
     mtd_pct_2yr_str, mtd_pct_2yr_pos = fmt_pct(mtd_pct_2yr)
+    mtd_pct_3yr_str, mtd_pct_3yr_pos = fmt_pct(mtd_pct_3yr)
 
     month_name = ref_date.strftime("%B")
 
@@ -852,6 +869,8 @@ def build_detail(metric_name: str, all_data: dict):
                                 mtd_pct_py_str, mtd_pct_py_pos),
                 comparison_line(f"vs {two_yr_fy} MTD" if two_yr_fy else "vs -2yr",
                                 mtd_diff_2yr_str, mtd_diff_2yr_pos, mtd_pct_2yr_str, mtd_pct_2yr_pos),
+                comparison_line(f"vs {three_yr_fy} MTD" if three_yr_fy else "vs -3yr",
+                                mtd_diff_3yr_str, mtd_diff_3yr_pos, mtd_pct_3yr_str, mtd_pct_3yr_pos),
             ], style={"flex": "1 1 300px", "minWidth": "280px"}),
 
         ], style={"display": "flex", "flexWrap": "wrap", "gap": "20px", "marginBottom": "24px"}),
@@ -1531,7 +1550,7 @@ def build_year_review(all_data: dict, fy_a: str, fy_b: str):
     return html.Div([
         card([
             html.Div([
-                html.H2(f"Year in Review — FY {fy_a} vs FY {fy_b}", style={
+                html.H2(f"FY Comparison — FY {fy_a} vs FY {fy_b}", style={
                     "margin": "0 0 4px 0", "fontSize": "22px", "color": config.COLORS["text"],
                 }),
                 html.Div("Priceline Pharmacy Pacific Fair", style={
@@ -1545,7 +1564,7 @@ def build_year_review(all_data: dict, fy_a: str, fy_b: str):
                 "fontSize": "11px", "color": config.COLORS["text_muted"], "marginTop": "12px",
             }) if note else None,
         ]),
-    ])
+    ], id="report-printable")
 
 
 # ---------------------------------------------------------------------------
@@ -1692,6 +1711,18 @@ app.clientside_callback(
     """,
     Output("print-dummy", "children"),
     Input("print-button", "n_clicks"),
+    prevent_initial_call=True,
+)
+
+app.clientside_callback(
+    """
+    function(n_clicks) {
+        if (n_clicks > 0) { window.print(); }
+        return "";
+    }
+    """,
+    Output("print-dummy-2", "children"),
+    Input("year-print-button", "n_clicks"),
     prevent_initial_call=True,
 )
 

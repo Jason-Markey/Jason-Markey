@@ -67,7 +67,7 @@ button:active {
         background-color: #ffffff !important;
     }
     /* Hide everything except the report table */
-    button, .metric-dropdown, #range-container, #report-container,
+    button, .metric-dropdown, #range-container, #report-container, #year-container,
     .tab-container, #main-tabs, h1, #last-data-date, #last-refresh-time {
         display: none !important;
     }
