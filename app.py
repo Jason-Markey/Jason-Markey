@@ -1598,6 +1598,52 @@ def build_year_review(all_data: dict, fy_a: str, fy_b: str):
         note = (f"Note: FY {newer_fy} is in progress (data to {fmt_date(newer_max)}). "
                 f"The other year is capped at the same point for a like-for-like comparison.")
 
+    # ── All-years progression table (full-year values, oldest → newest) ────
+    all_fys = sorted(
+        [fy for fy, df in all_data.items() if not df.empty],
+        key=lambda f: int(f.split("/")[0]),
+    )
+
+    prog_rows = [html.Tr([
+        html.Th("Metric", style={**header_style, "textAlign": "left"}),
+    ] + [
+        html.Th(f"FY {fy}" + (" (in progress)" if fy == current_fy else ""), style=header_style)
+        for fy in all_fys
+    ])]
+
+    def group_header_wide(group):
+        return html.Tr([html.Td(group, colSpan=1 + len(all_fys), style={
+            "padding": "12px 14px 6px 14px", "fontWeight": "700",
+            "color": config.COLORS["text"], "fontSize": "13px",
+            "textTransform": "uppercase", "letterSpacing": "1.5px",
+            "borderBottom": f"2px solid {config.COLORS['accent_light']}",
+        })])
+
+    for group in config.METRIC_GROUPS:
+        group_metrics = [(n, m) for n, m in config.METRICS.items() if m.get("group") == group]
+        if not group_metrics:
+            continue
+        prog_rows.append(group_header_wide(group))
+        for metric_name, meta in group_metrics:
+            key = meta["key"]
+            fmt = meta["format"]
+            agg = meta["aggregation"]
+            metric_df = data_module.get_metric_data(all_data, key)
+
+            cell = {"padding": "9px 14px", "textAlign": "right", "fontSize": "13px",
+                    "borderBottom": f"1px solid {config.COLORS['card_border']}"}
+            cells = [html.Td(metric_name, style={**cell, "textAlign": "left",
+                                                 "color": config.COLORS["text"], "fontWeight": "500"})]
+            for fy in all_fys:
+                sub = metric_df[metric_df["fy_year"] == fy]
+                v = None if sub.empty else (sub["value"].mean() if agg == "average" else sub["value"].sum())
+                cells.append(html.Td(fmt_value(v, fmt), style={
+                    **cell,
+                    "color": config.COLORS["text"] if fy == all_fys[-1] else config.COLORS["text_muted"],
+                    "fontWeight": "600" if fy == all_fys[-1] else "400",
+                }))
+            prog_rows.append(html.Tr(cells))
+
     return html.Div([
         card([
             html.Div([
@@ -1614,6 +1660,21 @@ def build_year_review(all_data: dict, fy_a: str, fy_b: str):
             html.Div(note, style={
                 "fontSize": "11px", "color": config.COLORS["text_muted"], "marginTop": "12px",
             }) if note else None,
+        ], style={"marginBottom": "24px"}),
+        card([
+            html.Div("Year-by-Year Progression — full-year totals", style={
+                "fontSize": "13px", "color": config.COLORS["text_muted"],
+                "marginBottom": "12px", "fontWeight": "600",
+                "textTransform": "uppercase", "letterSpacing": "1px",
+            }),
+            html.Div([
+                html.Table(prog_rows, style={"width": "100%", "borderCollapse": "collapse"}),
+            ], style={"overflowX": "auto"}),
+            html.Div(
+                f"Full uncapped totals for every year in the data. FY {current_fy} is still in "
+                "progress, so its numbers will keep growing through the year.",
+                style={"fontSize": "11px", "color": config.COLORS["text_muted"], "marginTop": "12px"},
+            ),
         ]),
     ], id="report-printable")
 
