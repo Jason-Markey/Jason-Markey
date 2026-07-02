@@ -369,6 +369,8 @@ app.layout = html.Div(
                         style=TAB_STYLE, selected_style=TAB_SELECTED_STYLE),
                 dcc.Tab(label="Monthly Report", value="tab-report",
                         style=TAB_STYLE, selected_style=TAB_SELECTED_STYLE),
+                dcc.Tab(label="Year in Review", value="tab-year",
+                        style=TAB_STYLE, selected_style=TAB_SELECTED_STYLE),
             ],
             style={"marginBottom": "20px"},
         ),
@@ -447,6 +449,34 @@ app.layout = html.Div(
                 className="metric-dropdown",
             ),
         ], id="month-container", style={"display": "none"}),
+
+        # ── Year pickers (Year in Review tab only) ────────────────────────
+        html.Div([
+            html.Div([
+                html.Label("Year", style={"color": config.COLORS["text_muted"],
+                                          "fontSize": "13px", "marginBottom": "6px",
+                                          "display": "block"}),
+                dcc.Dropdown(
+                    id="year-a-dropdown",
+                    clearable=False,
+                    style={"width": "180px", "maxWidth": "100%",
+                           "color": "#000000", "backgroundColor": "#ffffff"},
+                    className="metric-dropdown",
+                ),
+            ]),
+            html.Div([
+                html.Label("Compare Against", style={"color": config.COLORS["text_muted"],
+                                                     "fontSize": "13px", "marginBottom": "6px",
+                                                     "display": "block"}),
+                dcc.Dropdown(
+                    id="year-b-dropdown",
+                    clearable=False,
+                    style={"width": "180px", "maxWidth": "100%",
+                           "color": "#000000", "backgroundColor": "#ffffff"},
+                    className="metric-dropdown",
+                ),
+            ]),
+        ], id="year-container", style={"display": "none"}),
 
         html.Div(id="main-content"),
         html.Div(id="print-dummy", style={"display": "none"}),
@@ -561,6 +591,7 @@ def build_detail(metric_name: str, all_data: dict):
     current_fy = data_module.get_current_fy()
     prior_fy = data_module.get_prior_fy(current_fy, 1)
     two_yr_fy = data_module.get_prior_fy(current_fy, 2)
+    three_yr_fy = data_module.get_prior_fy(current_fy, 3)
 
     metric_df = data_module.get_metric_data(all_data, key)
 
@@ -574,16 +605,21 @@ def build_detail(metric_name: str, all_data: dict):
     ytd_cy = get_ytd(metric_df, agg, current_fy)
     ytd_py = get_ytd_to_month(metric_df, agg, prior_fy, current_fy_month, ref_date.day) if prior_fy else None
     ytd_2yr = get_ytd_to_month(metric_df, agg, two_yr_fy, current_fy_month, ref_date.day) if two_yr_fy else None
+    ytd_3yr = get_ytd_to_month(metric_df, agg, three_yr_fy, current_fy_month, ref_date.day) if three_yr_fy else None
 
     diff_py = (ytd_cy - ytd_py) if (ytd_cy is not None and ytd_py is not None) else None
     diff_2yr = (ytd_cy - ytd_2yr) if (ytd_cy is not None and ytd_2yr is not None) else None
+    diff_3yr = (ytd_cy - ytd_3yr) if (ytd_cy is not None and ytd_3yr is not None) else None
     pct_py = (diff_py / ytd_py * 100) if (diff_py is not None and ytd_py and ytd_py != 0) else None
     pct_2yr = (diff_2yr / ytd_2yr * 100) if (diff_2yr is not None and ytd_2yr and ytd_2yr != 0) else None
+    pct_3yr = (diff_3yr / ytd_3yr * 100) if (diff_3yr is not None and ytd_3yr and ytd_3yr != 0) else None
 
     diff_py_str, diff_py_pos = fmt_diff(diff_py, fmt)
     diff_2yr_str, diff_2yr_pos = fmt_diff(diff_2yr, fmt)
+    diff_3yr_str, diff_3yr_pos = fmt_diff(diff_3yr, fmt)
     pct_py_str, pct_py_pos = fmt_pct(pct_py)
     pct_2yr_str, pct_2yr_pos = fmt_pct(pct_2yr)
+    pct_3yr_str, pct_3yr_pos = fmt_pct(pct_3yr)
 
     # ── MTD values (current month vs same month PY, capped at same day) ──
     max_day = ref_date.day
@@ -613,6 +649,7 @@ def build_detail(metric_name: str, all_data: dict):
     cy_monthly = aggregate_monthly(metric_df[metric_df["fy_year"] == current_fy], agg)
     py_monthly = aggregate_monthly(metric_df[metric_df["fy_year"] == prior_fy], agg) if prior_fy else pd.Series(dtype=float)
     twoyr_monthly = aggregate_monthly(metric_df[metric_df["fy_year"] == two_yr_fy], agg) if two_yr_fy else pd.Series(dtype=float)
+    threeyr_monthly = aggregate_monthly(metric_df[metric_df["fy_year"] == three_yr_fy], agg) if three_yr_fy else pd.Series(dtype=float)
 
     months = list(range(1, 13))
 
@@ -644,6 +681,14 @@ def build_detail(metric_name: str, all_data: dict):
             line=dict(color=config.COLORS["line_2yr"], width=2),
             marker=dict(size=5), connectgaps=False,
         ))
+    if three_yr_fy and not threeyr_monthly.empty:
+        fig.add_trace(go.Scatter(
+            x=MONTH_LABELS,
+            y=[safe_get(threeyr_monthly, m) for m in months],
+            mode="lines+markers", name=three_yr_fy,
+            line=dict(color=config.COLORS["line_3yr"], width=2),
+            marker=dict(size=5), connectgaps=False,
+        ))
     dark_chart_layout(fig, title=metric_name)
 
     # ── Comparison table rows ─────────────────────────────────────────────
@@ -673,8 +718,10 @@ def build_detail(metric_name: str, all_data: dict):
 
     diffs_py = diff_vals(cy_monthly, py_monthly)
     diffs_2yr = diff_vals(cy_monthly, twoyr_monthly)
+    diffs_3yr = diff_vals(cy_monthly, threeyr_monthly)
     pcts_py = pct_vals(diffs_py, py_monthly)
     pcts_2yr = pct_vals(diffs_2yr, twoyr_monthly)
+    pcts_3yr = pct_vals(diffs_3yr, threeyr_monthly)
 
     def color_cells(vals):
         colors = []
@@ -704,16 +751,21 @@ def build_detail(metric_name: str, all_data: dict):
         "CY": row_vals(cy_monthly),
         "PY": row_vals(py_monthly),
         "-2 Yr": row_vals(twoyr_monthly),
+        "-3 Yr": row_vals(threeyr_monthly),
         "vs PY": arrow_fmt(diffs_py),
         "vs -2yr": arrow_fmt(diffs_2yr),
+        "vs -3yr": arrow_fmt(diffs_3yr),
         "vs PY%": arrow_fmt(pcts_py, is_pct=True),
         "vs -2yr%": arrow_fmt(pcts_2yr, is_pct=True),
+        "vs -3yr%": arrow_fmt(pcts_3yr, is_pct=True),
     }
     color_map = {
         "vs PY": color_cells(diffs_py),
         "vs -2yr": color_cells(diffs_2yr),
+        "vs -3yr": color_cells(diffs_3yr),
         "vs PY%": color_cells(pcts_py),
         "vs -2yr%": color_cells(pcts_2yr),
+        "vs -3yr%": color_cells(pcts_3yr),
     }
 
     def make_table_row(label, values, cell_colors=None):
@@ -777,6 +829,8 @@ def build_detail(metric_name: str, all_data: dict):
                 comparison_line(f"vs {prior_fy} YTD", diff_py_str, diff_py_pos, pct_py_str, pct_py_pos),
                 comparison_line(f"vs {two_yr_fy} YTD" if two_yr_fy else "vs -2yr",
                                 diff_2yr_str, diff_2yr_pos, pct_2yr_str, pct_2yr_pos),
+                comparison_line(f"vs {three_yr_fy} YTD" if three_yr_fy else "vs -3yr",
+                                diff_3yr_str, diff_3yr_pos, pct_3yr_str, pct_3yr_pos),
             ], style={"flex": "1 1 300px", "minWidth": "280px"}),
 
             card([
@@ -1376,6 +1430,125 @@ def build_report(all_data: dict, report_value: str):
 
 
 # ---------------------------------------------------------------------------
+# Year in Review tab
+# ---------------------------------------------------------------------------
+def get_fy_options(all_data: dict):
+    """All financial years present in the data, newest first."""
+    fys = [fy for fy, df in all_data.items() if not df.empty]
+    fys.sort(key=lambda f: int(f.split("/")[0]), reverse=True)
+    return [{"label": f"FY {fy}", "value": fy} for fy in fys]
+
+
+def build_year_review(all_data: dict, fy_a: str, fy_b: str):
+    if not fy_a or not fy_b:
+        return html.Div("Select two years to compare.", style={"color": config.COLORS["text_muted"]})
+
+    # Like-for-like: if the newer year is incomplete, cap the older year at
+    # the newer year's most recent date (same FY month + day).
+    def fy_dates(fy):
+        df = all_data.get(fy, pd.DataFrame())
+        if df.empty or "date" not in df.columns:
+            return None
+        return df["date"].max()
+
+    newer_fy = max(fy_a, fy_b, key=lambda f: int(f.split("/")[0]))
+    newer_max = fy_dates(newer_fy)
+    current_fy = data_module.get_current_fy()
+    partial = newer_fy == current_fy and newer_max is not None
+    cap_month = data_module.get_fy_month(newer_max) if partial else None
+    cap_day = newer_max.day if partial else None
+
+    header_style = {
+        "padding": "10px 14px", "textAlign": "right",
+        "backgroundColor": config.COLORS["table_header"],
+        "color": config.COLORS["text"], "fontSize": "13px", "fontWeight": "600",
+    }
+    rows = [html.Tr([
+        html.Th("Metric", style={**header_style, "textAlign": "left"}),
+        html.Th(f"FY {fy_a}", style=header_style),
+        html.Th(f"FY {fy_b}", style=header_style),
+        html.Th("Change", style=header_style),
+        html.Th("Change %", style=header_style),
+    ])]
+
+    def group_header(group):
+        return html.Tr([html.Td(group, colSpan=5, style={
+            "padding": "12px 14px 6px 14px", "fontWeight": "700",
+            "color": config.COLORS["text"], "fontSize": "13px",
+            "textTransform": "uppercase", "letterSpacing": "1.5px",
+            "borderBottom": f"2px solid {config.COLORS['accent_light']}",
+        })])
+
+    def year_value(metric_df, agg, fy):
+        sub = metric_df[metric_df["fy_year"] == fy]
+        # Cap at same point in year when comparing a partial year
+        if partial and fy != newer_fy and not sub.empty:
+            in_month = (sub["fy_month"] == cap_month) & (sub["date"].apply(lambda d: d.day) <= cap_day)
+            sub = sub[(sub["fy_month"] < cap_month) | in_month]
+        if sub.empty:
+            return None
+        return sub["value"].mean() if agg == "average" else sub["value"].sum()
+
+    for group in config.METRIC_GROUPS:
+        group_metrics = [(n, m) for n, m in config.METRICS.items() if m.get("group") == group]
+        if not group_metrics:
+            continue
+        rows.append(group_header(group))
+        for metric_name, meta in group_metrics:
+            key = meta["key"]
+            fmt = meta["format"]
+            agg = meta["aggregation"]
+            metric_df = data_module.get_metric_data(all_data, key)
+
+            v_a = year_value(metric_df, agg, fy_a)
+            v_b = year_value(metric_df, agg, fy_b)
+            diff = (v_a - v_b) if (v_a is not None and v_b is not None) else None
+            pct = (diff / v_b * 100) if (diff is not None and v_b and v_b != 0) else None
+
+            diff_str, diff_pos = fmt_diff(diff, fmt)
+            pct_str, pct_pos = fmt_pct(pct)
+            diff_color = config.COLORS["positive"] if diff_pos else config.COLORS["negative"]
+            pct_color = config.COLORS["positive"] if pct_pos else config.COLORS["negative"]
+            if diff is None:
+                diff_color = pct_color = config.COLORS["text_muted"]
+
+            cell = {"padding": "9px 14px", "textAlign": "right", "fontSize": "13px",
+                    "borderBottom": f"1px solid {config.COLORS['card_border']}"}
+            rows.append(html.Tr([
+                html.Td(metric_name, style={**cell, "textAlign": "left",
+                                            "color": config.COLORS["text"], "fontWeight": "500"}),
+                html.Td(fmt_value(v_a, fmt), style={**cell, "color": config.COLORS["text"]}),
+                html.Td(fmt_value(v_b, fmt), style={**cell, "color": config.COLORS["text_muted"]}),
+                html.Td(diff_str, style={**cell, "color": diff_color, "fontWeight": "600"}),
+                html.Td(pct_str, style={**cell, "color": pct_color, "fontWeight": "600"}),
+            ]))
+
+    note = ""
+    if partial:
+        note = (f"Note: FY {newer_fy} is in progress (data to {fmt_date(newer_max)}). "
+                f"The other year is capped at the same point for a like-for-like comparison.")
+
+    return html.Div([
+        card([
+            html.Div([
+                html.H2(f"Year in Review — FY {fy_a} vs FY {fy_b}", style={
+                    "margin": "0 0 4px 0", "fontSize": "22px", "color": config.COLORS["text"],
+                }),
+                html.Div("Priceline Pharmacy Pacific Fair", style={
+                    "fontSize": "13px", "color": config.COLORS["text_muted"], "marginBottom": "16px",
+                }),
+            ]),
+            html.Div([
+                html.Table(rows, style={"width": "100%", "borderCollapse": "collapse"}),
+            ], style={"overflowX": "auto"}),
+            html.Div(note, style={
+                "fontSize": "11px", "color": config.COLORS["text_muted"], "marginTop": "12px",
+            }) if note else None,
+        ]),
+    ])
+
+
+# ---------------------------------------------------------------------------
 # Callbacks
 # ---------------------------------------------------------------------------
 @app.callback(
@@ -1400,6 +1573,11 @@ def toggle_theme(_clicks, current):
     Output("month-container", "style"),
     Output("month-detail-dropdown", "options"),
     Output("month-detail-dropdown", "value"),
+    Output("year-container", "style"),
+    Output("year-a-dropdown", "options"),
+    Output("year-a-dropdown", "value"),
+    Output("year-b-dropdown", "options"),
+    Output("year-b-dropdown", "value"),
     Output("page-root", "style"),
     Output("page-root", "className"),
     Input("main-tabs", "value"),
@@ -1410,10 +1588,12 @@ def toggle_theme(_clicks, current):
     Input("date-range-picker", "end_date"),
     Input("report-month-dropdown", "value"),
     Input("month-detail-dropdown", "value"),
+    Input("year-a-dropdown", "value"),
+    Input("year-b-dropdown", "value"),
     Input("theme-store", "data"),
 )
 def update_dashboard(tab, metric_name, _n, _clicks, range_start, range_end,
-                     report_value, month_value, theme):
+                     report_value, month_value, year_a, year_b, theme):
     ctx = dash.callback_context
     force = bool(ctx.triggered and ctx.triggered[0]["prop_id"].startswith("refresh-button"))
 
@@ -1432,24 +1612,36 @@ def update_dashboard(tab, metric_name, _n, _clicks, range_start, range_end,
 
     hidden = {"display": "none"}
     dropdown_style = {"marginBottom": "24px"}
-    if tab in ("tab-overview", "tab-report"):
+    if tab in ("tab-overview", "tab-report", "tab-year"):
         dropdown_style = hidden
     range_style = {"marginBottom": "24px"} if tab == "tab-range" else hidden
     report_style = ({"marginBottom": "24px", "display": "flex", "gap": "20px",
                      "flexWrap": "wrap", "alignItems": "flex-end"}
                     if tab == "tab-report" else hidden)
     month_style = {"marginBottom": "24px"} if tab == "tab-month" else hidden
+    year_style = ({"marginBottom": "24px", "display": "flex", "gap": "20px",
+                   "flexWrap": "wrap", "alignItems": "flex-end"}
+                  if tab == "tab-year" else hidden)
 
     if all_data is None:
         return (setup_message(), "Not connected", "", dropdown_style,
                 range_style, report_style, [], None,
-                month_style, [], None, root_style, root_class)
+                month_style, [], None,
+                year_style, [], None, [], None, root_style, root_class)
 
     report_options = get_report_month_options(all_data)
     if report_value is None and report_options:
         report_value = report_options[0]["value"]
     if month_value is None and report_options:
         month_value = report_options[0]["value"]
+
+    fy_options = get_fy_options(all_data)
+    if year_a is None and fy_options:
+        year_a = fy_options[0]["value"]
+    if year_b is None and len(fy_options) > 1:
+        year_b = fy_options[1]["value"]
+    elif year_b is None and fy_options:
+        year_b = fy_options[0]["value"]
 
     current_fy = data_module.get_current_fy()
     cy_df = all_data.get(current_fy, pd.DataFrame())
@@ -1473,6 +1665,8 @@ def update_dashboard(tab, metric_name, _n, _clicks, range_start, range_end,
             content = build_report(all_data, report_value)
         elif tab == "tab-month":
             content = build_month_detail(metric_name, all_data, month_value)
+        elif tab == "tab-year":
+            content = build_year_review(all_data, year_a, year_b)
         else:
             content = build_detail(metric_name, all_data)
     except Exception as exc:
@@ -1484,6 +1678,7 @@ def update_dashboard(tab, metric_name, _n, _clicks, range_start, range_end,
     return (content, date_str, refresh_str, dropdown_style,
             range_style, report_style, report_options, report_value,
             month_style, report_options, month_value,
+            year_style, fy_options, year_a, fy_options, year_b,
             root_style, root_class)
 
 
