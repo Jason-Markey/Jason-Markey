@@ -450,6 +450,20 @@ app.layout = html.Div(
             ),
         ], id="month-container", style={"display": "none"}),
 
+        # ── Year picker (Day of Week tab only) ─────────────────────────────
+        html.Div([
+            html.Label("Years to Show", style={"color": config.COLORS["text_muted"],
+                                               "fontSize": "13px", "marginBottom": "6px",
+                                               "display": "block"}),
+            dcc.Dropdown(
+                id="dow-years-dropdown",
+                multi=True,
+                style={"width": "380px", "maxWidth": "100%",
+                       "color": "#000000", "backgroundColor": "#ffffff"},
+                className="metric-dropdown",
+            ),
+        ], id="dow-container", style={"display": "none"}),
+
         # ── Year pickers (Year in Review tab only) ────────────────────────
         html.Div([
             html.Div([
@@ -1065,7 +1079,7 @@ def build_trends(metric_name: str, all_data: dict):
 # ---------------------------------------------------------------------------
 # Day of Week tab
 # ---------------------------------------------------------------------------
-def build_dow(metric_name: str, all_data: dict):
+def build_dow(metric_name: str, all_data: dict, selected_fys=None):
     meta = config.METRICS[metric_name]
     key = meta["key"]
     fmt = meta["format"]
@@ -1077,6 +1091,11 @@ def build_dow(metric_name: str, all_data: dict):
     if metric_df.empty:
         return html.Div("No data available.", style={"color": config.COLORS["text_muted"]})
 
+    if not selected_fys:
+        selected_fys = [fy for fy in (current_fy, prior_fy) if fy]
+    # Plot oldest first so newest ends up drawn last / rightmost in each group
+    selected_fys = sorted(set(selected_fys), key=lambda f: int(f.split("/")[0]))
+
     def weekday_means(fy):
         sub = metric_df[metric_df["fy_year"] == fy].copy()
         if sub.empty:
@@ -1085,21 +1104,22 @@ def build_dow(metric_name: str, all_data: dict):
         means = sub.groupby("weekday")["value"].mean()
         return [means.get(i, None) for i in range(7)]
 
-    cy_means = weekday_means(current_fy)
-    py_means = weekday_means(prior_fy) if prior_fy else [None] * 7
+    bar_colors = [config.COLORS["line_3yr"], config.COLORS["line_2yr"],
+                  config.COLORS["line_py"], config.COLORS["line_cy"]]
+    # Newest year always gets the CY colour, working backwards for older years
+    n = len(selected_fys)
+    colors_for = bar_colors[-n:] if n <= len(bar_colors) else bar_colors * ((n // len(bar_colors)) + 1)
 
     fig = go.Figure()
-    fig.add_trace(go.Bar(
-        x=WEEKDAY_LABELS, y=cy_means, name=current_fy,
-        marker_color=config.COLORS["line_cy"],
-    ))
-    if prior_fy:
+    for fy_label, colr in zip(selected_fys, colors_for):
         fig.add_trace(go.Bar(
-            x=WEEKDAY_LABELS, y=py_means, name=prior_fy,
-            marker_color=config.COLORS["line_py"],
+            x=WEEKDAY_LABELS, y=weekday_means(fy_label), name=fy_label,
+            marker_color=colr,
         ))
     dark_chart_layout(fig, title=f"{metric_name} — Average by Day of Week")
     fig.update_layout(barmode="group", hovermode="x")
+
+    cy_means = weekday_means(selected_fys[-1])
 
     # Best / worst day callout
     valid = [(WEEKDAY_LABELS[i], v) for i, v in enumerate(cy_means) if v is not None]
@@ -1108,7 +1128,7 @@ def build_dow(metric_name: str, all_data: dict):
         best = max(valid, key=lambda t: t[1])
         worst = min(valid, key=lambda t: t[1])
         callout = [html.Div([
-            html.Span("Best day this year: ", style={"color": config.COLORS["text_muted"], "fontSize": "13px"}),
+            html.Span(f"Best day ({selected_fys[-1]}): ", style={"color": config.COLORS["text_muted"], "fontSize": "13px"}),
             html.Span(f"{best[0]} ({fmt_value(best[1], fmt)} avg)", style={
                 "color": config.COLORS["positive"], "fontWeight": "600", "fontSize": "13px",
                 "marginRight": "24px",
@@ -1160,11 +1180,18 @@ def build_range(metric_name: str, all_data: dict, start, end):
     val_cy, sub_cy = range_value(start, end)
     py_start, py_end = _shift_year(start, 1), _shift_year(end, 1)
     val_py, sub_py = range_value(py_start, py_end)
+    two_start, two_end = _shift_year(start, 2), _shift_year(end, 2)
+    val_2yr, sub_2yr = range_value(two_start, two_end)
 
     diff = (val_cy - val_py) if (val_cy is not None and val_py is not None) else None
     pct = (diff / val_py * 100) if (diff is not None and val_py and val_py != 0) else None
     diff_str, diff_pos = fmt_diff(diff, fmt)
     pct_str, pct_pos = fmt_pct(pct)
+
+    diff2 = (val_cy - val_2yr) if (val_cy is not None and val_2yr is not None) else None
+    pct2 = (diff2 / val_2yr * 100) if (diff2 is not None and val_2yr and val_2yr != 0) else None
+    diff2_str, diff2_pos = fmt_diff(diff2, fmt)
+    pct2_str, pct2_pos = fmt_pct(pct2)
 
     # Daily chart for the selected range, with the same range last year overlaid
     fig = go.Figure()
@@ -1183,6 +1210,14 @@ def build_range(metric_name: str, all_data: dict, start, end):
             x=list(p["date_aligned"]), y=list(p["value"]),
             mode="lines+markers", name="Same dates last year",
             line=dict(color=config.COLORS["line_py"], width=2, dash="dot"), marker=dict(size=4),
+        ))
+    if not sub_2yr.empty:
+        p2 = sub_2yr.sort_values("date").copy()
+        p2["date_aligned"] = p2["date"].apply(lambda d: _shift_year(d, -2))
+        fig.add_trace(go.Scatter(
+            x=list(p2["date_aligned"]), y=list(p2["value"]),
+            mode="lines+markers", name="Same dates 2 years ago",
+            line=dict(color=config.COLORS["line_2yr"], width=2, dash="dot"), marker=dict(size=4),
         ))
     dark_chart_layout(fig, title=f"{metric_name} — {fmt_date(start)} to {fmt_date(end)}")
     add_holiday_markers(fig, start, end)
@@ -1203,7 +1238,14 @@ def build_range(metric_name: str, all_data: dict, start, end):
                     f"vs {fmt_date(py_start)}–{fmt_date(py_end)}",
                     diff_str, diff_pos, pct_str, pct_pos,
                 ),
+                comparison_line(
+                    f"vs {fmt_date(two_start)}–{fmt_date(two_end)}",
+                    diff2_str, diff2_pos, pct2_str, pct2_pos,
+                ),
                 html.Div(f"Last year: {fmt_value(val_py, fmt)}", style={
+                    "fontSize": "13px", "color": config.COLORS["text_muted"],
+                }),
+                html.Div(f"Two years ago: {fmt_value(val_2yr, fmt)}", style={
                     "fontSize": "13px", "color": config.COLORS["text_muted"],
                 }),
             ], style={"flex": "1 1 300px", "minWidth": "280px"}),
@@ -1230,6 +1272,7 @@ def build_month_detail(metric_name: str, all_data: dict, month_value: str):
     m = int(m)
     prior_fy = data_module.get_prior_fy(fy, 1)
     two_yr_fy = data_module.get_prior_fy(fy, 2)
+    three_yr_fy = data_module.get_prior_fy(fy, 3)
 
     month_label = MONTH_LABELS[m - 1]
     start_yy = int(fy.split("/")[0])
@@ -1253,6 +1296,7 @@ def build_month_detail(metric_name: str, all_data: dict, month_value: str):
     cy_days = month_days(fy)
     py_days = month_days(prior_fy)
     twoyr_days = month_days(two_yr_fy)
+    threeyr_days = month_days(three_yr_fy)
 
     days = list(range(1, 32))
 
@@ -1278,6 +1322,12 @@ def build_month_detail(metric_name: str, all_data: dict, month_value: str):
             line=dict(color=config.COLORS["line_2yr"], width=2),
             marker=dict(size=5), connectgaps=False,
         ))
+    if three_yr_fy and not threeyr_days.empty:
+        fig.add_trace(go.Scatter(
+            x=days, y=y_for(threeyr_days), mode="lines+markers", name=three_yr_fy,
+            line=dict(color=config.COLORS["line_3yr"], width=2),
+            marker=dict(size=5), connectgaps=False,
+        ))
     dark_chart_layout(fig, title=f"{metric_name} — {month_label} {year} by day")
     fig.update_xaxes(dtick=1, title_text="Day of month")
 
@@ -1289,6 +1339,7 @@ def build_month_detail(metric_name: str, all_data: dict, month_value: str):
             (fy, cy_days, config.COLORS["line_cy"], 2.5),
             (prior_fy, py_days, config.COLORS["line_py"], 2),
             (two_yr_fy, twoyr_days, config.COLORS["line_2yr"], 2),
+            (three_yr_fy, threeyr_days, config.COLORS["line_3yr"], 2),
         ]:
             if not label or series.empty:
                 continue
@@ -1597,6 +1648,9 @@ def toggle_theme(_clicks, current):
     Output("year-a-dropdown", "value"),
     Output("year-b-dropdown", "options"),
     Output("year-b-dropdown", "value"),
+    Output("dow-container", "style"),
+    Output("dow-years-dropdown", "options"),
+    Output("dow-years-dropdown", "value"),
     Output("page-root", "style"),
     Output("page-root", "className"),
     Input("main-tabs", "value"),
@@ -1609,10 +1663,11 @@ def toggle_theme(_clicks, current):
     Input("month-detail-dropdown", "value"),
     Input("year-a-dropdown", "value"),
     Input("year-b-dropdown", "value"),
+    Input("dow-years-dropdown", "value"),
     Input("theme-store", "data"),
 )
 def update_dashboard(tab, metric_name, _n, _clicks, range_start, range_end,
-                     report_value, month_value, year_a, year_b, theme):
+                     report_value, month_value, year_a, year_b, dow_years, theme):
     ctx = dash.callback_context
     force = bool(ctx.triggered and ctx.triggered[0]["prop_id"].startswith("refresh-button"))
 
@@ -1641,12 +1696,14 @@ def update_dashboard(tab, metric_name, _n, _clicks, range_start, range_end,
     year_style = ({"marginBottom": "24px", "display": "flex", "gap": "20px",
                    "flexWrap": "wrap", "alignItems": "flex-end"}
                   if tab == "tab-year" else hidden)
+    dow_style = {"marginBottom": "24px"} if tab == "tab-dow" else hidden
 
     if all_data is None:
         return (setup_message(), "Not connected", "", dropdown_style,
                 range_style, report_style, [], None,
                 month_style, [], None,
-                year_style, [], None, [], None, root_style, root_class)
+                year_style, [], None, [], None,
+                dow_style, [], None, root_style, root_class)
 
     report_options = get_report_month_options(all_data)
     if report_value is None and report_options:
@@ -1661,6 +1718,9 @@ def update_dashboard(tab, metric_name, _n, _clicks, range_start, range_end,
         year_b = fy_options[1]["value"]
     elif year_b is None and fy_options:
         year_b = fy_options[0]["value"]
+
+    if not dow_years and fy_options:
+        dow_years = [o["value"] for o in fy_options[:2]]
 
     current_fy = data_module.get_current_fy()
     cy_df = all_data.get(current_fy, pd.DataFrame())
@@ -1677,7 +1737,7 @@ def update_dashboard(tab, metric_name, _n, _clicks, range_start, range_end,
         elif tab == "tab-trends":
             content = build_trends(metric_name, all_data)
         elif tab == "tab-dow":
-            content = build_dow(metric_name, all_data)
+            content = build_dow(metric_name, all_data, dow_years)
         elif tab == "tab-range":
             content = build_range(metric_name, all_data, range_start, range_end)
         elif tab == "tab-report":
@@ -1698,6 +1758,7 @@ def update_dashboard(tab, metric_name, _n, _clicks, range_start, range_end,
             range_style, report_style, report_options, report_value,
             month_style, report_options, month_value,
             year_style, fy_options, year_a, fy_options, year_b,
+            dow_style, fy_options, dow_years,
             root_style, root_class)
 
 
