@@ -1566,8 +1566,10 @@ def build_report(all_data: dict, report_value: str):
 # Year in Review tab
 # ---------------------------------------------------------------------------
 def get_fy_options(all_data: dict):
-    """All financial years present in the data, newest first."""
-    fys = [fy for fy, df in all_data.items() if not df.empty]
+    """Financial years present in the data (from EARLIEST_FY onwards), newest first."""
+    earliest = int(config.EARLIEST_FY.split("/")[0])
+    fys = [fy for fy, df in all_data.items()
+           if not df.empty and int(fy.split("/")[0]) >= earliest]
     fys.sort(key=lambda f: int(f.split("/")[0]), reverse=True)
     return [{"label": f"FY {fy}", "value": fy} for fy in fys]
 
@@ -1662,8 +1664,10 @@ def build_year_review(all_data: dict, fy_a: str, fy_b: str):
                 f"The other year is capped at the same point for a like-for-like comparison.")
 
     # ── All-years progression table (full-year values, oldest → newest) ────
+    earliest = int(config.EARLIEST_FY.split("/")[0])
     all_fys = sorted(
-        [fy for fy, df in all_data.items() if not df.empty],
+        [fy for fy, df in all_data.items()
+         if not df.empty and int(fy.split("/")[0]) >= earliest],
         key=lambda f: int(f.split("/")[0]),
     )
 

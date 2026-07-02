@@ -230,6 +230,9 @@ METRIC_GROUPS = ["Whole Shop", "Front Shop", "Dispensary"]
 # Example: TARGETS = {"Daily Sales": 9000, "Script Numbers": 300}
 TARGETS = {}
 
+# Earliest financial year to show in FY Comparison (older data is patchy).
+EARLIEST_FY = "22/23"
+
 PALETTES = {
     "dark": {
         "background": "#1a1a2e",
