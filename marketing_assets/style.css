@@ -1,0 +1,9 @@
+/* Marketing Command Centre - small global styles */
+body { margin: 0; }
+details > summary { list-style: none; }
+details > summary::-webkit-details-marker { display: none; }
+details > summary::after { content: ""; }
+button:hover { filter: brightness(1.15); }
+::-webkit-scrollbar { width: 10px; }
+::-webkit-scrollbar-track { background: #1a1a2e; }
+::-webkit-scrollbar-thumb { background: #0f3460; border-radius: 5px; }
