@@ -6,13 +6,24 @@ I own and operate Priceline Pharmacy Pacific Fair, one of Australia's busiest re
 
 My interests span across:
 
-💊 Pharmacy and healthcare innovation 🏪 Retail business growth and operations 📈 Investing and financial markets 🏗️ Property development and commercial projects 🤖 Automation, AI, and workflow optimisation 💻 Building practical tools to improve business efficiency
+💊 Pharmacy and healthcare innovation
+🏪 Retail business growth and operations
+📈 Investing and financial markets
+🏗️ Property development and commercial projects
+🤖 Automation, AI, and workflow optimisation
+💻 Building practical tools to improve business efficiency
 
 I enjoy combining healthcare expertise with technology to solve real-world business problems. Many of my projects focus on automating processes, improving customer experiences, and creating scalable systems for retail pharmacy operations.
 
 When I'm not working, you'll usually find me investing, planning the next business opportunity, or on the squash or padel court.
 
-Current Focus Growing Priceline Pharmacy Pacific Fair Pharmacy acquisitions and expansion opportunities Healthcare technology and automation Property development projects AI-driven business solutions Connect With Me
+Current Focus
+Growing Priceline Pharmacy Pacific Fair
+Pharmacy acquisitions and expansion opportunities
+Healthcare technology and automation
+Property development projects
+AI-driven business solutions
+Connect With Me
 
 📍 Gold Coast, Queensland, Australia
 
