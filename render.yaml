@@ -1,0 +1,12 @@
+services:
+  - type: web
+    name: pharmacy-dashboard
+    runtime: python
+    plan: free
+    buildCommand: pip install -r requirements.txt
+    startCommand: gunicorn app:server --workers 1 --timeout 120
+    envVars:
+      - key: DASH_PASSWORD
+        sync: false        # set in the Render dashboard, never in code
+      - key: GOOGLE_CREDENTIALS_JSON
+        sync: false        # paste the contents of credentials.json here

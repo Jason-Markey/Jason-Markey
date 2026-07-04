@@ -4,3 +4,4 @@ pandas>=2.2
 gspread>=6.1
 google-auth>=2.37
 google-auth-oauthlib>=1.2
+gunicorn>=21.2

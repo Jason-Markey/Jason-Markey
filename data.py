@@ -2,6 +2,8 @@
 Data loading module for Pharmacy POS Dashboard.
 Reads from FRONT SHOP DETAILS and DISPENSARY DETAILS tabs.
 """
+import os
+import json
 import time
 import re
 from datetime import datetime, date
@@ -26,6 +28,12 @@ SCOPES = [
 
 
 def connect_to_google_sheets(credentials_path=None):
+    # Cloud hosting: credentials supplied via environment variable instead of a file
+    env_json = os.environ.get("GOOGLE_CREDENTIALS_JSON")
+    if env_json and not credentials_path:
+        info = json.loads(env_json)
+        credentials = Credentials.from_service_account_info(info, scopes=SCOPES)
+        return gspread.authorize(credentials)
     creds_path = credentials_path or config.CREDENTIALS_FILE
     credentials = Credentials.from_service_account_file(creds_path, scopes=SCOPES)
     return gspread.authorize(credentials)

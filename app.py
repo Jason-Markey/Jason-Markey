@@ -28,6 +28,22 @@ app = dash.Dash(
 )
 server = app.server  # for gunicorn if needed
 
+# ── Password protection (active only when DASH_PASSWORD is set, i.e. cloud) ──
+_DASH_USER = os.environ.get("DASH_USER", "jason")
+_DASH_PASSWORD = os.environ.get("DASH_PASSWORD")
+if _DASH_PASSWORD:
+    from flask import request, Response
+
+    @server.before_request
+    def _require_basic_auth():
+        auth = request.authorization
+        if auth and auth.username == _DASH_USER and auth.password == _DASH_PASSWORD:
+            return None
+        return Response(
+            "Login required", 401,
+            {"WWW-Authenticate": 'Basic realm="Pharmacy Dashboard"'},
+        )
+
 GRAPH_CONFIG = {
     "displayModeBar": True,
     "modeBarButtonsToRemove": [
@@ -2015,4 +2031,7 @@ app.clientside_callback(
 # Run
 # ---------------------------------------------------------------------------
 if __name__ == "__main__":
-    app.run(debug=False, host="127.0.0.1", port=8050)
+    # Local: 127.0.0.1:8050. Cloud hosts set PORT and need 0.0.0.0.
+    port = int(os.environ.get("PORT", 8050))
+    host = "0.0.0.0" if "PORT" in os.environ else "127.0.0.1"
+    app.run(debug=False, host=host, port=port)
