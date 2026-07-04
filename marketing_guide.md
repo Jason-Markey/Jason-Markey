@@ -14,6 +14,10 @@ Windows shortcut: double-click `run_marketing.bat`.
 
 First run only: `pip install dash` if you don't already have it (you do if the POS dashboard runs).
 
+**Want it on your phone / any device with synced ticks?** Follow `cloudflare_setup.md` —
+it walks through putting this on https://marketing.pricelinepf.com.au behind an email
+login, running from the always-on shop PC.
+
 ## What's inside
 
 | Tab | What it does |

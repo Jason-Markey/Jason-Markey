@@ -19,6 +19,11 @@ from dash.exceptions import PreventUpdate
 
 from marketing_plan import TASKS, PLAYBOOK, CHANNEL_COLORS, WEEKS
 
+# Optional second lock for remote access (Cloudflare Access is the primary one).
+# Set the MARKETING_PASSWORD environment variable to require a browser login;
+# leave it unset for plain local use.
+MARKETING_PASSWORD = os.environ.get("MARKETING_PASSWORD", "")
+
 # ---------------------------------------------------------------------------
 # Theme (matches the POS dashboard dark palette, with Priceline pink accent)
 # ---------------------------------------------------------------------------
@@ -78,6 +83,16 @@ app = dash.Dash(
     meta_tags=[{"name": "viewport", "content": "width=device-width, initial-scale=1"}],
 )
 server = app.server
+
+if MARKETING_PASSWORD:
+    from flask import request, Response
+
+    @server.before_request
+    def _require_password():
+        auth = request.authorization
+        if not auth or auth.password != MARKETING_PASSWORD:
+            return Response("Login required.", 401,
+                            {"WWW-Authenticate": 'Basic realm="Marketing Command Centre"'})
 
 
 # ---------------------------------------------------------------------------
@@ -550,4 +565,8 @@ def render_header(_bump):
 
 if __name__ == "__main__":
     print("Marketing Command Centre -> http://localhost:8060")
-    app.run(debug=False, port=8060)
+    try:
+        from waitress import serve  # production server, ideal for always-on use
+        serve(server, host="127.0.0.1", port=8060, threads=4)
+    except ImportError:
+        app.run(debug=False, port=8060)
