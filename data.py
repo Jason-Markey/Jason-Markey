@@ -76,6 +76,32 @@ def _parse_date(raw):
         return None
 
 
+_MON3 = {"jan": 1, "feb": 2, "mar": 3, "apr": 4, "may": 5, "jun": 6,
+         "jul": 7, "aug": 8, "sep": 9, "oct": 10, "nov": 11, "dec": 12}
+
+
+def _parse_year_month(raw):
+    """Extract (year, month) from the many ways a month cell might display:
+    2025-07, 2025-07-01, 2025/7, 1/07/2025 (AU date), Jul 2025, July-25."""
+    if raw is None:
+        return None
+    s = str(raw).strip()
+    if not s:
+        return None
+    m = re.match(r"(\d{4})[-/](\d{1,2})", s)          # YYYY-MM[-DD]
+    if m:
+        return int(m.group(1)), int(m.group(2))
+    m = re.match(r"\d{1,2}[/-](\d{1,2})[/-](\d{4})", s)  # D/M/YYYY (AU)
+    if m:
+        return int(m.group(2)), int(m.group(1))
+    m = re.match(r"([A-Za-z]{3})[A-Za-z]*[ \-,]+(\d{2,4})", s)  # Mon YYYY
+    if m and m.group(1).lower() in _MON3:
+        yr = int(m.group(2))
+        yr += 2000 if yr < 100 else 0
+        return yr, _MON3[m.group(1).lower()]
+    return None
+
+
 def _to_float(val):
     if val is None or val == "":
         return None
@@ -291,14 +317,15 @@ def get_wages_data(force_refresh=False):
     for row in values[1:]:
         if i_month >= len(row):
             continue
-        m = re.match(r"(\d{4})-(\d{1,2})", str(row[i_month]).strip())
-        if not m:
+        ym = _parse_year_month(row[i_month])
+        if ym is None:
             continue
+        yr, mo = ym
         wages = _to_float(row[i_wages] if i_wages < len(row) else None) or 0.0
         sup = 0.0
         if i_super is not None and i_super < len(row):
             sup = _to_float(row[i_super]) or 0.0
-        records.append({"year": int(m.group(1)), "month": int(m.group(2)),
+        records.append({"year": yr, "month": mo,
                         "staff_cost": wages + sup})
 
     df = pd.DataFrame(records) if records else empty
