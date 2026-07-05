@@ -278,7 +278,40 @@ PALETTES = {
     },
 }
 
-COLORS = PALETTES["dark"]
+# Theme palette resolved per request (per thread), not stored as a shared
+# mutable global — otherwise concurrent viewers on different themes would race.
+import threading as _threading
+
+_theme_local = _threading.local()
+
+
+def set_theme(theme):
+    """Set the active palette for the current request thread."""
+    _theme_local.value = theme if theme in PALETTES else "dark"
+
+
+def _current_palette():
+    return PALETTES.get(getattr(_theme_local, "value", "dark"), PALETTES["dark"])
+
+
+class _PaletteProxy:
+    """Read-only mapping that always resolves against the current thread's theme.
+
+    Lets existing ``config.COLORS["card"]`` call sites keep working while the
+    value is looked up per request instead of assigned to a module global.
+    """
+
+    def __getitem__(self, key):
+        return _current_palette()[key]
+
+    def get(self, key, default=None):
+        return _current_palette().get(key, default)
+
+    def __contains__(self, key):
+        return key in _current_palette()
+
+
+COLORS = _PaletteProxy()
 
 FY_MONTH_LABELS = [
     "Jul", "Aug", "Sep", "Oct", "Nov", "Dec",

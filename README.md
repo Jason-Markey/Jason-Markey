@@ -1,30 +1,107 @@
-About Me
+# Pharmacy POS Dashboard
 
-Hi, I'm Jason Markey — a pharmacist, business owner, and entrepreneur based on the Gold Coast, Australia.
+A private analytics dashboard for **Priceline Pharmacy Pacific Fair**. It reads daily
+point-of-sale data from a Google Sheet and presents it as an interactive, multi-year
+dashboard (Python + [Dash](https://dash.plotly.com/) + Plotly).
 
-I own and operate Priceline Pharmacy Pacific Fair, one of Australia's busiest retail pharmacy locations, where I lead a team of 25+ staff and focus on delivering exceptional healthcare, customer service, and retail experiences.
+The dashboard shows **turnover and operational metrics only** — no net-profit figures.
 
-My interests span across:
+---
 
-💊 Pharmacy and healthcare innovation
-🏪 Retail business growth and operations
-📈 Investing and financial markets
-🏗️ Property development and commercial projects
-🤖 Automation, AI, and workflow optimisation
-💻 Building practical tools to improve business efficiency
+## What it does
 
-I enjoy combining healthcare expertise with technology to solve real-world business problems. Many of my projects focus on automating processes, improving customer experiences, and creating scalable systems for retail pharmacy operations.
+- Reads two Google Sheet tabs — `FRONT SHOP DETAILS` and `DISPENSARY DETAILS` — plus an
+  optional read-only `DASHBOARD HISTORY` tab (backfilled older days) and a `WAGES` tab.
+- Presents ~20 metrics across three groups (Whole Shop / Front Shop / Dispensary),
+  configured entirely in `config.py`.
+- All comparisons use the **Australian financial year** (Jul–Jun) and are like-for-like:
+  prior years are capped at the most recent uploaded date.
+- Data is cached for 5 minutes and refreshes automatically; a **Refresh Now** button
+  forces an immediate reload.
 
-When I'm not working, you'll usually find me investing, planning the next business opportunity, or on the squash or padel court.
+### Tabs
+| Tab | Purpose |
+|-----|---------|
+| Overview | YTD cards for every metric vs the same point last year |
+| Metric Detail | One metric: YTD/MTD cards + monthly chart & table vs up to 4 prior years |
+| Month Detail | One month, days on the x-axis, year over year |
+| FY Comparison | Any two financial years side by side + a year-by-year progression table (printable) |
+| Trends | Rolling averages, script-type mix, scripts vs front-shop correlation |
+| Day of Week | Average by weekday, selectable years |
+| Monthly Compare | Months on the x-axis, grouped bars, selectable years |
+| Wages % | Staff wages + super as a % of turnover, by FY month (from the `WAGES` tab) |
+| Custom Range | Any date range vs the same dates in prior years |
+| Monthly Report | Printable one-month summary |
 
-Current Focus
-Growing Priceline Pharmacy Pacific Fair
-Pharmacy acquisitions and expansion opportunities
-Healthcare technology and automation
-Property development projects
-AI-driven business solutions
-Connect With Me
+---
 
-📍 Gold Coast, Queensland, Australia
+## Running locally
 
-"Continuous improvement, customer focus, and long-term value creation."
+```bash
+pip install -r requirements.txt
+python app.py
+```
+
+Then open <http://127.0.0.1:8050>.
+
+You need a Google service-account credentials file at
+`~/.pharmacy-dashboard/credentials.json` (Windows: `C:\Users\<you>\.pharmacy-dashboard\`).
+See `setup_guide.md` for the full first-time setup (Python install, Google Cloud project,
+service account, sharing the sheet).
+
+On Windows you can also double-click `run.bat`.
+
+---
+
+## Deployment (phone access)
+
+The app runs unchanged locally, and can be hosted so it's reachable from a phone:
+
+- **PythonAnywhere** (always-on, free): manual WSGI setup, `git pull` to update.
+- **Render** (`render.yaml` included, free): auto-deploys on every push, sleeps when idle.
+
+Both are protected by HTTP Basic Auth. Hosting is enabled by two environment variables
+(never commit these):
+
+| Variable | Purpose |
+|----------|---------|
+| `DASH_PASSWORD` | Enables the login prompt (username defaults to `jason`, override with `DASH_USER`). |
+| `GOOGLE_CREDENTIALS_JSON` | Full contents of `credentials.json`, used instead of the file on hosts with no filesystem secret. |
+
+When neither is set (i.e. local use), there is no password and the app reads
+`credentials.json` from disk as before.
+
+---
+
+## Hard rules (do not break)
+
+1. **Never commit** `credentials.json` or the Resend API key — `.gitignore` covers them.
+2. **Never write to** the `FRONT SHOP DETAILS` or `DISPENSARY DETAILS` tabs. Their rows feed
+   fragile formulas in the yearly tabs; appending rows there breaks them. The dashboard's
+   service account is scoped **read-only** — keep it that way. Historical backfill lives in
+   the separate `DASHBOARD HISTORY` tab instead.
+3. **Turnover only** — no net-profit figures anywhere in the dashboard.
+
+---
+
+## Project layout
+
+```
+app.py            Dash app: layout, all tab builders, the main callback
+config.py         Metrics, column maps, palettes, tab names, targets
+data.py           Google Sheets loading, caching, FY helpers, timezone helpers
+holidays.py       QLD public holidays (computed, no network)
+email_report.py   Weekly/monthly email summaries via Resend (run manually or scheduled)
+assets/           CSS + JS (theme, keyboard shortcuts)
+render.yaml       Render.com deployment config
+setup_guide.md    Step-by-step first-time setup
+scripts/archive/  One-off historical-data migration scripts (see its README — do not reuse blindly)
+```
+
+---
+
+## Notes
+
+- Times use the `Australia/Brisbane` timezone (`data.today()` / `data.now()`) so hosted
+  servers running in UTC still roll the day over at the right moment.
+- Optional daily targets can be drawn on the Trends chart via `TARGETS` in `config.py`.

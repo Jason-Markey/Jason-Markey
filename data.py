@@ -6,13 +6,35 @@ import os
 import json
 import time
 import re
-from datetime import datetime, date
+from datetime import datetime, date, timedelta, timezone
 
 import pandas as pd
 import gspread
 from google.oauth2.service_account import Credentials
 
 import config
+
+# All "today"/"now" logic uses the pharmacy's local timezone so hosted servers
+# running in UTC (e.g. PythonAnywhere) still roll the day over correctly.
+# Prefer the IANA zone; fall back to a fixed UTC+10 offset if the tz database
+# is unavailable (e.g. Windows without the `tzdata` package). Queensland has no
+# daylight saving, so the fixed offset is always exactly correct.
+try:
+    from zoneinfo import ZoneInfo
+    TZ = ZoneInfo("Australia/Brisbane")
+except Exception:
+    TZ = timezone(timedelta(hours=10))
+
+
+def now():
+    """Current datetime in the pharmacy's timezone (naive-compatible date via .date())."""
+    return datetime.now(TZ)
+
+
+def today():
+    """Current date in the pharmacy's timezone."""
+    return now().date()
+
 
 _cache = {"data": None, "timestamp": 0}
 
@@ -83,7 +105,7 @@ def get_fy_label(d):
 
 
 def get_current_fy():
-    return get_fy_label(date.today())
+    return get_fy_label(today())
 
 
 def get_prior_fy(fy_label, n=1):
@@ -146,8 +168,10 @@ def load_all_data(client, spreadsheet_name=None):
                 fs_df.reset_index(drop=True, inplace=True)
             else:
                 fs_df = hist_df
-    except Exception:
-        pass  # tab may not exist — that's fine
+    except gspread.exceptions.WorksheetNotFound:
+        pass  # history tab is optional — absence is normal
+    except Exception as exc:
+        print(f"Warning: could not load {config.HISTORY_TAB} tab: {exc}")
 
     try:
         disp_df = _load_tab(client, ss_name, config.DISPENSARY_TAB, config.DISP_COLS)

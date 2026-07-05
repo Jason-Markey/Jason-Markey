@@ -50,7 +50,7 @@ def shift_year(d, years=1):
 
 def get_period(mode):
     """Return (start, end, label) for the last full week or month."""
-    today = date.today()
+    today = data_module.today()
     if mode == "weekly":
         # Last full Mon-Sun week
         last_sunday = today - timedelta(days=today.weekday() + 1)

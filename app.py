@@ -423,8 +423,8 @@ app.layout = html.Div(
             dcc.DatePickerRange(
                 id="date-range-picker",
                 display_format="D/M/YYYY",
-                start_date=(date.today() - timedelta(days=28)),
-                end_date=date.today(),
+                start_date=(data_module.today() - timedelta(days=28)),
+                end_date=data_module.today(),
                 className="range-picker",
             ),
         ], id="range-container", style={"display": "none"}),
@@ -550,12 +550,12 @@ app.layout = html.Div(
 def build_overview(all_data: dict):
     current_fy = data_module.get_current_fy()
     prior_fy = data_module.get_prior_fy(current_fy, 1)
-    today = date.today()
+    today = data_module.today()
     current_fy_month = data_module.get_fy_month(today)
 
     def sparkline(metric_df):
         """Tiny 90-day trend line (weekly totals to smooth noise)."""
-        cutoff = date.today() - timedelta(days=90)
+        cutoff = data_module.today() - timedelta(days=90)
         sub = metric_df[metric_df["date"] >= cutoff].sort_values("date")
         if len(sub) < 7:
             return None
@@ -656,7 +656,7 @@ def build_detail(metric_name: str, all_data: dict):
 
     metric_df = data_module.get_metric_data(all_data, key)
 
-    today = date.today()
+    today = data_module.today()
     # Cap prior years at the most recent uploaded date for this metric, not today
     cy_dates = metric_df[metric_df["fy_year"] == current_fy]["date"]
     ref_date = cy_dates.max() if not cy_dates.empty else today
@@ -1028,7 +1028,7 @@ def build_trends(metric_name: str, all_data: dict):
 
     df = metric_df.sort_values("date").copy()
     # Limit to the last 14 months so the chart stays readable
-    cutoff = date.today() - timedelta(days=425)
+    cutoff = data_module.today() - timedelta(days=425)
     df = df[df["date"] >= cutoff]
     df = df.set_index("date")
 
@@ -1110,7 +1110,7 @@ def build_trends(metric_name: str, all_data: dict):
     mix_colors = [config.COLORS["line_cy"], config.COLORS["line_py"],
                   config.COLORS["line_2yr"], config.COLORS["accent_light"],
                   config.COLORS["positive"], config.COLORS["text_muted"]]
-    mix_cutoff = date.today() - timedelta(days=425)
+    mix_cutoff = data_module.today() - timedelta(days=425)
     fig3 = go.Figure()
     has_mix = False
     for (label, mkey), colr in zip(mix_keys, mix_colors):
@@ -1303,7 +1303,7 @@ def build_wages(all_data: dict, force=False):
     sales_df["cal_month"] = sales_df["date"].apply(lambda d: d.month)
     monthly_sales = sales_df.groupby(["year", "cal_month"])["value"].sum()
 
-    today = date.today()
+    today = data_module.today()
     rows = []
     for _, r in wages_df.sort_values(["year", "month"]).iterrows():
         y, m, cost = int(r["year"]), int(r["month"]), float(r["staff_cost"])
@@ -1793,7 +1793,7 @@ def build_report(all_data: dict, report_value: str):
             html.Div([
                 html.Table(rows, style={"width": "100%", "borderCollapse": "collapse"}),
             ], style={"overflowX": "auto"}),
-            html.Div(f"Generated {fmt_date(date.today())}", style={
+            html.Div(f"Generated {fmt_date(data_module.today())}", style={
                 "fontSize": "11px", "color": config.COLORS["text_muted"], "marginTop": "16px",
             }),
         ]),
@@ -2043,7 +2043,7 @@ def update_dashboard(tab, metric_name, _n, _clicks, range_start, range_end,
     force = bool(ctx.triggered and ctx.triggered[0]["prop_id"].startswith("refresh-button"))
 
     # Apply theme palette before building any content
-    config.COLORS = config.PALETTES.get(theme, config.PALETTES["dark"])
+    config.set_theme(theme)
     root_style = {
         "backgroundColor": config.COLORS["background"],
         "minHeight": "100vh",
@@ -2104,7 +2104,7 @@ def update_dashboard(tab, metric_name, _n, _clicks, range_start, range_end,
     else:
         date_str = "No data"
 
-    refresh_str = f"Refreshed {datetime.now().strftime('%H:%M')}"
+    refresh_str = f"Refreshed {data_module.now().strftime('%H:%M')}"
 
     try:
         if tab == "tab-overview":
