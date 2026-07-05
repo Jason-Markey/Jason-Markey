@@ -215,6 +215,66 @@ def get_metric_data(all_data, metric_key):
     return pd.concat(frames, ignore_index=True)
 
 
+_wages_cache = {"data": None, "timestamp": 0}
+
+
+def get_wages_data(force_refresh=False):
+    """Monthly staff cost (wages + super, owner excluded) from the WAGES tab.
+
+    Returns a DataFrame with columns: year, month, staff_cost.
+    Empty DataFrame if the tab doesn't exist or can't be read.
+    """
+    if (not force_refresh and _wages_cache["data"] is not None
+            and (time.time() - _wages_cache["timestamp"]) < config.CACHE_TTL):
+        return _wages_cache["data"]
+
+    empty = pd.DataFrame(columns=["year", "month", "staff_cost"])
+    try:
+        client = connect_to_google_sheets()
+        ws = client.open(config.SPREADSHEET_NAME).worksheet(config.WAGES_TAB)
+        values = ws.get_all_values()
+    except Exception as exc:
+        print(f"Warning: could not load {config.WAGES_TAB} tab: {exc}")
+        return _wages_cache["data"] if _wages_cache["data"] is not None else empty
+
+    if not values:
+        return empty
+    header = [h.strip().lower() for h in values[0]]
+
+    def _col(name):
+        name = name.lower()
+        for i, h in enumerate(header):
+            if h == name:
+                return i
+        return None
+
+    i_month = _col("Month")
+    i_wages = _col("Staff Wages ex Jason")
+    i_super = _col("Staff Super ex Jason")
+    if i_month is None or i_wages is None:
+        print(f"Warning: {config.WAGES_TAB} tab is missing expected columns")
+        return empty
+
+    records = []
+    for row in values[1:]:
+        if i_month >= len(row):
+            continue
+        m = re.match(r"(\d{4})-(\d{1,2})", str(row[i_month]).strip())
+        if not m:
+            continue
+        wages = _to_float(row[i_wages] if i_wages < len(row) else None) or 0.0
+        sup = 0.0
+        if i_super is not None and i_super < len(row):
+            sup = _to_float(row[i_super]) or 0.0
+        records.append({"year": int(m.group(1)), "month": int(m.group(2)),
+                        "staff_cost": wages + sup})
+
+    df = pd.DataFrame(records) if records else empty
+    _wages_cache["data"] = df
+    _wages_cache["timestamp"] = time.time()
+    return df
+
+
 def get_all_data(force_refresh=False):
     if not force_refresh and _cache_is_fresh():
         return _cache["data"]

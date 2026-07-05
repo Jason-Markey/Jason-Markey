@@ -15,6 +15,9 @@ DISPENSARY_TAB = "DISPENSARY DETAILS"
 # Optional read-only tab holding backfilled historical days (same layout as
 # FRONT SHOP DETAILS). Details tabs always win if a date exists in both.
 HISTORY_TAB = "DASHBOARD HISTORY"
+# Monthly staff wage costs (from Xero, owner's pay excluded). Read-only tab,
+# columns: Month (YYYY-MM), ..., Staff Wages ex Jason, Staff Super ex Jason.
+WAGES_TAB = "WAGES"
 
 # Front Shop Details columns (0-based, row 1 = headers, row 2+ = data)
 FS_COLS = {

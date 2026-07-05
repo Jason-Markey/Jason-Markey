@@ -369,6 +369,8 @@ app.layout = html.Div(
                         style=TAB_STYLE, selected_style=TAB_SELECTED_STYLE),
                 dcc.Tab(label="Monthly Compare", value="tab-mcomp",
                         style=TAB_STYLE, selected_style=TAB_SELECTED_STYLE),
+                dcc.Tab(label="Wages %", value="tab-wages",
+                        style=TAB_STYLE, selected_style=TAB_SELECTED_STYLE),
                 dcc.Tab(label="Custom Range", value="tab-range",
                         style=TAB_STYLE, selected_style=TAB_SELECTED_STYLE),
                 dcc.Tab(label="Monthly Report", value="tab-report",
@@ -1260,6 +1262,143 @@ def build_month_compare(metric_name: str, all_data: dict, selected_fys=None):
 
 
 # ---------------------------------------------------------------------------
+# Wages % tab — staff wages + super (owner excluded) as % of Daily Sales.
+# Turnover only; no profit figures are shown anywhere on this tab.
+# ---------------------------------------------------------------------------
+def build_wages(all_data: dict, force=False):
+    wages_df = data_module.get_wages_data(force_refresh=force)
+    if wages_df.empty:
+        return card([html.Div([
+            html.Div("No wage data found.", style={
+                "fontSize": "16px", "fontWeight": "600", "marginBottom": "8px"}),
+            html.Div(
+                f"Add a '{config.WAGES_TAB}' tab to the spreadsheet with columns: "
+                "Month (YYYY-MM), Staff Wages ex Jason, Staff Super ex Jason.",
+                style={"color": config.COLORS["text_muted"], "fontSize": "13px"}),
+        ])])
+
+    sales_df = data_module.get_metric_data(all_data, "daily_sales")
+    if sales_df.empty:
+        return html.Div("No sales data available.",
+                        style={"color": config.COLORS["text_muted"]})
+
+    sales_df = sales_df.copy()
+    sales_df["year"] = sales_df["date"].apply(lambda d: d.year)
+    sales_df["cal_month"] = sales_df["date"].apply(lambda d: d.month)
+    monthly_sales = sales_df.groupby(["year", "cal_month"])["value"].sum()
+
+    today = date.today()
+    rows = []
+    for _, r in wages_df.sort_values(["year", "month"]).iterrows():
+        y, m, cost = int(r["year"]), int(r["month"]), float(r["staff_cost"])
+        if (y, m) >= (today.year, today.month):
+            continue  # skip months that aren't finished yet
+        turnover = monthly_sales.get((y, m))
+        if turnover is None or turnover <= 0 or cost <= 0:
+            continue
+        first = date(y, m, 1)
+        rows.append({
+            "year": y, "month": m,
+            "fy": data_module.get_fy_label(first),
+            "fy_month": data_module.get_fy_month(first),
+            "label": first.strftime("%b %Y"),
+            "turnover": turnover, "cost": cost,
+            "pct": cost / turnover * 100,
+        })
+
+    if not rows:
+        return card([html.Div(
+            "Wage months don't overlap with uploaded sales data yet.",
+            style={"color": config.COLORS["text_muted"]})])
+
+    # ── Chart: grouped bars, FY months on x-axis, one series per FY ─────
+    fys = sorted({r["fy"] for r in rows}, key=lambda f: int(f.split("/")[0]))
+    bar_colors = [config.COLORS["line_4yr"], config.COLORS["line_3yr"],
+                  config.COLORS["line_2yr"], config.COLORS["line_py"],
+                  config.COLORS["line_cy"]]
+    n = len(fys)
+    colors_for = bar_colors[-n:] if n <= len(bar_colors) else bar_colors * ((n // len(bar_colors)) + 1)
+
+    fig = go.Figure()
+    for fy_label, colr in zip(fys, colors_for):
+        by_m = {r["fy_month"]: r["pct"] for r in rows if r["fy"] == fy_label}
+        fig.add_trace(go.Bar(
+            x=MONTH_LABELS, y=[by_m.get(m) for m in range(1, 13)],
+            name=fy_label, marker_color=colr,
+            hovertemplate="%{y:.1f}%<extra>" + fy_label + "</extra>",
+        ))
+    dark_chart_layout(fig, title="Staff Wages + Super — % of Daily Sales (owner excluded)")
+    fig.update_layout(barmode="group", hovermode="x", yaxis=dict(ticksuffix="%"))
+
+    target = config.TARGETS.get("Wages % of Sales")
+    if target:
+        fig.add_hline(
+            y=target,
+            line=dict(color=config.COLORS["positive"], width=1.5, dash="dash"),
+            annotation_text=f"Target {target:.1f}%",
+            annotation_font=dict(color=config.COLORS["positive"], size=11),
+        )
+
+    # ── FY summary cards ──────────────────────────────────────────────────
+    summary_cards = []
+    for fy_label in fys:
+        fy_rows = [r for r in rows if r["fy"] == fy_label]
+        fy_cost = sum(r["cost"] for r in fy_rows)
+        fy_turn = sum(r["turnover"] for r in fy_rows)
+        fy_pct = fy_cost / fy_turn * 100 if fy_turn else None
+        summary_cards.append(card([
+            html.Div(f"FY {fy_label}", style={
+                "color": config.COLORS["text_muted"], "fontSize": "12px"}),
+            html.Div(f"{fy_pct:.1f}%" if fy_pct is not None else "—", style={
+                "fontSize": "26px", "fontWeight": "700"}),
+            html.Div(f"{fmt_value(fy_cost, 'currency')} wages+super · "
+                     f"{fmt_value(fy_turn, 'currency')} turnover "
+                     f"({len(fy_rows)} mths)", style={
+                "color": config.COLORS["text_muted"], "fontSize": "12px"}),
+        ], style={"flex": "1", "minWidth": "220px"}))
+
+    # ── Table: most recent 13 months, newest first ────────────────────────
+    recent = sorted(rows, key=lambda r: (r["year"], r["month"]), reverse=True)[:13]
+    cell = {"padding": "8px 14px", "fontSize": "13px", "textAlign": "right"}
+    head = dict(cell, fontWeight="600", backgroundColor=config.COLORS["table_header"])
+    table_rows = []
+    for i, r in enumerate(recent):
+        row_style = ({"backgroundColor": config.COLORS["table_row_alt"]}
+                     if i % 2 else {})
+        table_rows.append(html.Tr([
+            html.Td(r["label"], style=dict(cell, textAlign="left")),
+            html.Td(fmt_value(r["turnover"], "currency"), style=cell),
+            html.Td(fmt_value(r["cost"], "currency"), style=cell),
+            html.Td(f"{r['pct']:.1f}%", style=dict(cell, fontWeight="600")),
+        ], style=row_style))
+
+    table = html.Table([
+        html.Thead(html.Tr([
+            html.Th("Month", style=dict(head, textAlign="left")),
+            html.Th("Turnover (Daily Sales)", style=head),
+            html.Th("Staff Wages + Super", style=head),
+            html.Th("Wages %", style=head),
+        ])),
+        html.Tbody(table_rows),
+    ], style={"width": "100%", "borderCollapse": "collapse"})
+
+    note = html.Div(
+        "Wage costs come from the WAGES tab (sourced from Xero, owner's pay and "
+        "super excluded). Turnover is Daily Sales from the POS. Months in "
+        "progress are excluded.",
+        style={"color": config.COLORS["text_muted"], "fontSize": "12px",
+               "marginTop": "10px"})
+
+    return html.Div([
+        html.Div(summary_cards, style={
+            "display": "flex", "gap": "16px", "flexWrap": "wrap",
+            "marginBottom": "20px"}),
+        card([dcc.Graph(figure=fig, config=GRAPH_CONFIG, style={"height": "420px"})]),
+        card([table, note], style={"marginTop": "20px"}),
+    ])
+
+
+# ---------------------------------------------------------------------------
 # Custom Range tab
 # ---------------------------------------------------------------------------
 def _shift_year(d, years):
@@ -1902,7 +2041,7 @@ def update_dashboard(tab, metric_name, _n, _clicks, range_start, range_end,
 
     hidden = {"display": "none"}
     dropdown_style = {"marginBottom": "24px"}
-    if tab in ("tab-overview", "tab-report", "tab-year"):
+    if tab in ("tab-overview", "tab-report", "tab-year", "tab-wages"):
         dropdown_style = hidden
     range_style = {"marginBottom": "24px"} if tab == "tab-range" else hidden
     report_style = ({"marginBottom": "24px", "display": "flex", "gap": "20px",
@@ -1960,6 +2099,8 @@ def update_dashboard(tab, metric_name, _n, _clicks, range_start, range_end,
             content = build_dow(metric_name, all_data, dow_years)
         elif tab == "tab-mcomp":
             content = build_month_compare(metric_name, all_data, mcomp_years)
+        elif tab == "tab-wages":
+            content = build_wages(all_data, force=force)
         elif tab == "tab-range":
             content = build_range(metric_name, all_data, range_start, range_end)
         elif tab == "tab-report":
