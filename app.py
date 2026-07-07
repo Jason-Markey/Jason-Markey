@@ -1405,13 +1405,99 @@ def build_wages(all_data: dict, force=False):
         style={"color": config.COLORS["text_muted"], "fontSize": "12px",
                "marginTop": "10px"})
 
+    projection_section = build_roster_projection(sales_df, today, force=force)
+
     return html.Div([
         html.Div(summary_cards, style={
             "display": "flex", "gap": "16px", "flexWrap": "wrap",
             "marginBottom": "20px"}),
         card([dcc.Graph(figure=fig, config=GRAPH_CONFIG, style={"height": "420px"})]),
         card([table, note], style={"marginTop": "20px"}),
-    ])
+    ] + projection_section)
+
+
+def build_roster_projection(sales_df, today, force=False):
+    """Projected wages % for current/upcoming rostered weeks (ROSTER tab).
+
+    Dormant by design: returns [] until a ROSTER tab exists in the sheet, so
+    the Wages % tab looks unchanged until the RosterElf export workflow is
+    set up. Expected sales for each week = same dates last year, scaled by
+    the last 28 days' year-on-year growth.
+    """
+    roster_df = data_module.get_roster_data(force_refresh=force)
+    if roster_df.empty:
+        return []
+
+    daily = sales_df.set_index("date")["value"]
+
+    # Year-on-year growth factor from the last 28 uploaded days
+    last_date = sales_df["date"].max()
+    recent_start = last_date - timedelta(days=27)
+    recent = daily[(daily.index >= recent_start) & (daily.index <= last_date)].sum()
+    ly = daily[(daily.index >= _shift_year(recent_start, 1)) &
+               (daily.index <= _shift_year(last_date, 1))].sum()
+    growth = (recent / ly) if (recent > 0 and ly > 0) else 1.0
+    growth = max(0.5, min(growth, 1.5))  # clamp against sparse-data extremes
+
+    # Current + future weeks only (a week is "current" until it has fully passed)
+    upcoming = roster_df[roster_df["week_start"].apply(
+        lambda d: d + timedelta(days=6) >= today)]
+    if upcoming.empty:
+        return []
+
+    target = config.TARGETS.get("Wages % of Sales")
+    cell = {"padding": "8px 14px", "fontSize": "13px", "textAlign": "right"}
+    head = dict(cell, fontWeight="600", backgroundColor=config.COLORS["table_header"])
+
+    rows_html = []
+    for i, (_, r) in enumerate(upcoming.sort_values("week_start").iterrows()):
+        ws_date = r["week_start"]
+        cost = float(r["rostered_cost"])
+        ly_week = daily[(daily.index >= _shift_year(ws_date, 1)) &
+                        (daily.index <= _shift_year(ws_date + timedelta(days=6), 1))].sum()
+        expected = ly_week * growth if ly_week > 0 else None
+        pct = (cost / expected * 100) if expected else None
+        if pct is None:
+            pct_str, pct_color = "—", config.COLORS["text_muted"]
+        else:
+            pct_str = f"{pct:.1f}%"
+            if target:
+                pct_color = (config.COLORS["positive"] if pct <= target
+                             else config.COLORS["negative"])
+            else:
+                pct_color = config.COLORS["text"]
+        rows_html.append(html.Tr([
+            html.Td(f"w/c {fmt_date(ws_date)}", style=dict(cell, textAlign="left")),
+            html.Td(fmt_value(cost, "currency"), style=cell),
+            html.Td(fmt_value(expected, "currency") if expected else "—", style=cell),
+            html.Td(pct_str, style=dict(cell, fontWeight="600", color=pct_color)),
+        ], style={"backgroundColor": config.COLORS["table_row_alt"]} if i % 2 else {}))
+
+    proj_table = html.Table([
+        html.Thead(html.Tr([
+            html.Th("Week", style=dict(head, textAlign="left")),
+            html.Th("Rostered Cost", style=head),
+            html.Th("Expected Sales*", style=head),
+            html.Th("Projected Wages %", style=head),
+        ])),
+        html.Tbody(rows_html),
+    ], style={"width": "100%", "borderCollapse": "collapse"})
+
+    proj_note = html.Div(
+        "*Expected sales = same week last year scaled by the last 28 days' "
+        f"year-on-year growth ({(growth - 1) * 100:+.1f}%). Rostered cost comes "
+        f"from the {config.ROSTER_TAB} tab (RosterElf export). Projections are a "
+        "guide only — actual wages land in the WAGES tab after payroll.",
+        style={"color": config.COLORS["text_muted"], "fontSize": "12px",
+               "marginTop": "10px"})
+
+    return [card([
+        html.Div("Roster Projection — upcoming weeks", style={
+            "fontSize": "13px", "color": config.COLORS["text_muted"],
+            "marginBottom": "12px", "fontWeight": "600",
+            "textTransform": "uppercase", "letterSpacing": "1px"}),
+        proj_table, proj_note,
+    ], style={"marginTop": "20px"})]
 
 
 # ---------------------------------------------------------------------------

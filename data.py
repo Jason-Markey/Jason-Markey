@@ -334,6 +334,79 @@ def get_wages_data(force_refresh=False):
     return df
 
 
+_roster_cache = {"data": None, "timestamp": 0}
+
+
+def get_roster_data(force_refresh=False):
+    """Forward rostered staff cost per week from the optional ROSTER tab.
+
+    Expected columns (matched by header name, case-insensitive):
+        Week starting — any date format (d/m/yyyy, yyyy-mm-dd, ...)
+        Rostered cost — dollars (loaded wages incl. super for that week)
+
+    Returns a DataFrame [week_start (date), rostered_cost (float)].
+    Empty DataFrame if the tab doesn't exist yet — the Wages % tab then
+    simply hides its projection section.
+    """
+    if (not force_refresh and _roster_cache["data"] is not None
+            and (time.time() - _roster_cache["timestamp"]) < config.CACHE_TTL):
+        return _roster_cache["data"]
+
+    empty = pd.DataFrame(columns=["week_start", "rostered_cost"])
+    try:
+        client = connect_to_google_sheets()
+        ws = client.open(config.SPREADSHEET_NAME).worksheet(config.ROSTER_TAB)
+        values = ws.get_all_values()
+    except gspread.exceptions.WorksheetNotFound:
+        return empty  # tab is optional — absence is the normal state for now
+    except Exception as exc:
+        print(f"Warning: could not load {config.ROSTER_TAB} tab: {exc}")
+        return _roster_cache["data"] if _roster_cache["data"] is not None else empty
+
+    if not values:
+        return empty
+    header = [h.strip().lower() for h in values[0]]
+
+    def _col(name):
+        name = name.lower()
+        return next((i for i, h in enumerate(header) if h == name), None)
+
+    i_week = _col("Week starting")
+    i_cost = _col("Rostered cost")
+    if i_week is None or i_cost is None:
+        print(f"Warning: {config.ROSTER_TAB} tab is missing expected columns "
+              "('Week starting', 'Rostered cost')")
+        return empty
+
+    records = []
+    for row in values[1:]:
+        if i_week >= len(row):
+            continue
+        raw = str(row[i_week]).strip()
+        d = _parse_date(raw)
+        if d is None:  # also accept ISO yyyy-mm-dd
+            m = re.match(r"(\d{4})-(\d{1,2})-(\d{1,2})", raw)
+            if m:
+                try:
+                    d = date(int(m.group(1)), int(m.group(2)), int(m.group(3)))
+                except ValueError:
+                    d = None
+        if d is None:
+            continue
+        cost = _to_float(row[i_cost] if i_cost < len(row) else None)
+        if cost is None or cost <= 0:
+            continue
+        records.append({"week_start": d, "rostered_cost": cost})
+
+    df = pd.DataFrame(records) if records else empty
+    if not df.empty:
+        df.sort_values("week_start", inplace=True)
+        df.reset_index(drop=True, inplace=True)
+    _roster_cache["data"] = df
+    _roster_cache["timestamp"] = time.time()
+    return df
+
+
 def get_all_data(force_refresh=False):
     if not force_refresh and _cache_is_fresh():
         return _cache["data"]

@@ -18,6 +18,10 @@ HISTORY_TAB = "DASHBOARD HISTORY"
 # Monthly staff wage costs (from Xero, owner's pay excluded). Read-only tab,
 # columns: Month (YYYY-MM), ..., Staff Wages ex Jason, Staff Super ex Jason.
 WAGES_TAB = "WAGES"
+# Optional forward roster costs (from RosterElf exports). Read-only tab,
+# columns: Week starting (date), Rostered cost. Until this tab exists the
+# Wages % tab simply hides the projection section — nothing to configure.
+ROSTER_TAB = "ROSTER"
 
 # Front Shop Details columns (0-based, row 1 = headers, row 2+ = data)
 FS_COLS = {
