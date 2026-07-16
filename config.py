@@ -47,6 +47,12 @@ FS_COLS = {
     "amex": 19,           # T
 }
 
+# Extra Front Shop columns resolved BY HEADER NAME at load time (safe wherever
+# the column sits in the sheet). key -> header text in row 1.
+FS_HEADER_COLS = {
+    "uber": "Uber",
+}
+
 # Dispensary Details columns (0-based, row 1 = headers, row 2+ = data)
 DISP_COLS = {
     "date": 0,                  # A
@@ -134,6 +140,13 @@ METRICS = {
     },
     "Sisterclub Sales": {
         "key": "club_sales",
+        "source": "front_shop",
+        "format": "currency",
+        "aggregation": "sum",
+        "group": "Front Shop",
+    },
+    "Uber Sales": {
+        "key": "uber",
         "source": "front_shop",
         "format": "currency",
         "aggregation": "sum",

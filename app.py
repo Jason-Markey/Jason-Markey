@@ -403,15 +403,21 @@ app.layout = html.Div(
             dcc.Dropdown(
                 id="metric-dropdown",
                 options=DROPDOWN_OPTIONS,
-                value="Daily Sales",
-                clearable=False,
+                value=["Daily Sales"],
+                multi=True,
                 style={
-                    "width": "320px",
+                    "width": "420px",
                     "maxWidth": "100%",
                     "color": "#000000",
                     "backgroundColor": "#ffffff",
                 },
                 className="metric-dropdown",
+            ),
+            html.Div(
+                "Tick extra metrics to overlay them on the Metric Detail chart. "
+                "Cards and tables follow the first metric.",
+                style={"color": config.COLORS["text_muted"], "fontSize": "11px",
+                       "marginTop": "4px"},
             ),
         ], id="dropdown-container", style={"marginBottom": "24px"}),
 
@@ -642,7 +648,43 @@ def build_overview(all_data: dict):
 # ---------------------------------------------------------------------------
 # Metric Detail tab
 # ---------------------------------------------------------------------------
-def build_detail(metric_name: str, all_data: dict):
+def build_multi_metric_fig(metric_names, all_data, current_fy):
+    """Current-FY monthly lines for several metrics on one chart.
+
+    Metrics whose format differs from the first metric's go on a right-hand
+    axis so dollars and counts/percentages can share the chart sensibly.
+    """
+    months = list(range(1, 13))
+    fig = make_subplots(specs=[[{"secondary_y": True}]])
+    palette = [config.COLORS["line_cy"], config.COLORS["line_py"],
+               config.COLORS["line_2yr"], config.COLORS["line_3yr"],
+               config.COLORS["line_4yr"], config.COLORS["accent_light"]]
+    primary_fmt = config.METRICS[metric_names[0]]["format"]
+    used_secondary = False
+    for i, name in enumerate(metric_names):
+        meta = config.METRICS[name]
+        mdf = data_module.get_metric_data(all_data, meta["key"])
+        monthly = aggregate_monthly(mdf[mdf["fy_year"] == current_fy], meta["aggregation"])
+        secondary = meta["format"] != primary_fmt
+        used_secondary = used_secondary or secondary
+        fig.add_trace(go.Scatter(
+            x=MONTH_LABELS, y=[monthly.get(m) for m in months],
+            mode="lines+markers", name=name + (" (right)" if secondary else ""),
+            line=dict(color=palette[i % len(palette)], width=2.5),
+            marker=dict(size=6), connectgaps=False,
+        ), secondary_y=secondary)
+    dark_chart_layout(fig, title=f"Selected metrics — FY {current_fy}")
+    fig.update_yaxes(gridcolor="#2a2a4a", color=config.COLORS["text"], secondary_y=False)
+    if used_secondary:
+        fig.update_yaxes(showgrid=False, color=config.COLORS["text"], secondary_y=True)
+    return fig
+
+
+def build_detail(metric_names, all_data: dict):
+    if isinstance(metric_names, str):
+        metric_names = [metric_names]
+    metric_names = [m for m in metric_names if m in config.METRICS] or ["Daily Sales"]
+    metric_name = metric_names[0]
     meta = config.METRICS[metric_name]
     key = meta["key"]
     fmt = meta["format"]
@@ -775,6 +817,12 @@ def build_detail(metric_name: str, all_data: dict):
             marker=dict(size=5), connectgaps=False,
         ))
     dark_chart_layout(fig, title=metric_name)
+
+    # With extra metrics ticked, the chart compares them for the current FY
+    # instead of showing one metric across years. Cards/tables stay on the
+    # first metric.
+    if len(metric_names) > 1:
+        fig = build_multi_metric_fig(metric_names, all_data, current_fy)
 
     # ── Comparison table rows ─────────────────────────────────────────────
     def row_vals(series):
@@ -2192,27 +2240,35 @@ def update_dashboard(tab, metric_name, _n, _clicks, range_start, range_end,
 
     refresh_str = f"Refreshed {data_module.now().strftime('%H:%M')}"
 
+    # Multi-select dropdown: first metric drives single-metric tabs; the full
+    # list only affects the Metric Detail chart overlay.
+    metric_list = metric_name if isinstance(metric_name, list) else [metric_name]
+    metric_list = [m for m in metric_list if isinstance(m, str) and m in config.METRICS]
+    if not metric_list:
+        metric_list = ["Daily Sales"]
+    primary_metric = metric_list[0]
+
     try:
         if tab == "tab-overview":
             content = build_overview(all_data)
         elif tab == "tab-trends":
-            content = build_trends(metric_name, all_data)
+            content = build_trends(primary_metric, all_data)
         elif tab == "tab-dow":
-            content = build_dow(metric_name, all_data, dow_years)
+            content = build_dow(primary_metric, all_data, dow_years)
         elif tab == "tab-mcomp":
-            content = build_month_compare(metric_name, all_data, mcomp_years)
+            content = build_month_compare(primary_metric, all_data, mcomp_years)
         elif tab == "tab-wages":
             content = build_wages(all_data, force=force)
         elif tab == "tab-range":
-            content = build_range(metric_name, all_data, range_start, range_end)
+            content = build_range(primary_metric, all_data, range_start, range_end)
         elif tab == "tab-report":
             content = build_report(all_data, report_value)
         elif tab == "tab-month":
-            content = build_month_detail(metric_name, all_data, month_value)
+            content = build_month_detail(primary_metric, all_data, month_value)
         elif tab == "tab-year":
             content = build_year_review(all_data, year_a, year_b)
         else:
-            content = build_detail(metric_name, all_data)
+            content = build_detail(metric_list, all_data)
     except Exception as exc:
         content = html.Div(
             f"Error building dashboard: {exc}",

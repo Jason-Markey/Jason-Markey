@@ -145,10 +145,23 @@ def get_prior_fy(fy_label, n=1):
     return f"{new_start:02d}/{new_end:02d}"
 
 
-def _load_tab(client, spreadsheet_name, tab_name, col_map):
+def _load_tab(client, spreadsheet_name, tab_name, col_map, header_cols=None):
     spreadsheet = client.open(spreadsheet_name)
     worksheet = spreadsheet.worksheet(tab_name)
     all_values = worksheet.get_all_values()
+    if not all_values:
+        return pd.DataFrame()
+
+    # Fixed positional columns, plus optional columns found by header name
+    # (robust to where the column was added in the sheet).
+    effective_cols = dict(col_map)
+    if header_cols:
+        headers = [h.strip().lower() for h in all_values[0]]
+        for key, header_name in header_cols.items():
+            target = header_name.strip().lower()
+            if target in headers:
+                effective_cols[key] = headers.index(target)
+
     data_rows = all_values[1:]  # skip header row
 
     records = []
@@ -160,7 +173,7 @@ def _load_tab(client, spreadsheet_name, tab_name, col_map):
             continue
 
         record = {"date": parsed}
-        for key, idx in col_map.items():
+        for key, idx in effective_cols.items():
             if key == "date":
                 continue
             record[key] = _to_float(row[idx] if idx < len(row) else None)
@@ -177,7 +190,8 @@ def load_all_data(client, spreadsheet_name=None):
     ss_name = spreadsheet_name or config.SPREADSHEET_NAME
 
     try:
-        fs_df = _load_tab(client, ss_name, config.FRONT_SHOP_TAB, config.FS_COLS)
+        fs_df = _load_tab(client, ss_name, config.FRONT_SHOP_TAB, config.FS_COLS,
+                          header_cols=config.FS_HEADER_COLS)
     except Exception as exc:
         print(f"Warning: could not load Front Shop Details: {exc}")
         fs_df = pd.DataFrame()
