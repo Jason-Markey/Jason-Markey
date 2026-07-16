@@ -648,32 +648,69 @@ def build_overview(all_data: dict):
 # ---------------------------------------------------------------------------
 # Metric Detail tab
 # ---------------------------------------------------------------------------
-def build_multi_metric_fig(metric_names, all_data, current_fy):
-    """Current-FY monthly lines for several metrics on one chart.
+def build_multi_metric_fig(metric_names, all_data, current_fy=None):
+    """Rolling last-12-months lines for several metrics on one chart.
 
-    Metrics whose format differs from the first metric's go on a right-hand
-    axis so dollars and counts/percentages can share the chart sensibly.
+    Uses the trailing 12 calendar months (not FY-to-date) so there is always
+    a full year of line, even in the first weeks of a new financial year.
+    Metrics on a very different scale to the first one go on a right-hand
+    axis so e.g. a $39 average sale isn't crushed flat next to $500K totals.
     """
-    months = list(range(1, 13))
+    end = data_module.today()
+    month_keys = []
+    y, m = end.year, end.month
+    for _ in range(12):
+        month_keys.append((y, m))
+        m -= 1
+        if m == 0:
+            y -= 1
+            m = 12
+    month_keys.reverse()
+    labels = [date(ky, km, 1).strftime("%b %y") for ky, km in month_keys]
+
+    series = []
+    for name in metric_names:
+        meta = config.METRICS[name]
+        mdf = data_module.get_metric_data(all_data, meta["key"])
+        if mdf.empty:
+            series.append((name, [None] * 12))
+            continue
+        sub = mdf.copy()
+        sub["ym"] = sub["date"].apply(lambda d: (d.year, d.month))
+        grouped = sub.groupby("ym")["value"]
+        agg = grouped.mean() if meta["aggregation"] == "average" else grouped.sum()
+        series.append((name, [agg.get(k) for k in month_keys]))
+
+    def scale_of(vals):
+        vs = [abs(v) for v in vals if v is not None and v != 0]
+        return max(vs) if vs else None
+
+    primary_scale = scale_of(series[0][1])
+
     fig = make_subplots(specs=[[{"secondary_y": True}]])
     palette = [config.COLORS["line_cy"], config.COLORS["line_py"],
                config.COLORS["line_2yr"], config.COLORS["line_3yr"],
                config.COLORS["line_4yr"], config.COLORS["accent_light"]]
-    primary_fmt = config.METRICS[metric_names[0]]["format"]
     used_secondary = False
-    for i, name in enumerate(metric_names):
-        meta = config.METRICS[name]
-        mdf = data_module.get_metric_data(all_data, meta["key"])
-        monthly = aggregate_monthly(mdf[mdf["fy_year"] == current_fy], meta["aggregation"])
-        secondary = meta["format"] != primary_fmt
+    for i, (name, vals) in enumerate(series):
+        s = scale_of(vals)
+        secondary = False
+        if i > 0 and primary_scale and s:
+            ratio = s / primary_scale
+            secondary = ratio > 8 or ratio < 1 / 8
         used_secondary = used_secondary or secondary
         fig.add_trace(go.Scatter(
-            x=MONTH_LABELS, y=[monthly.get(m) for m in months],
+            x=labels, y=vals,
             mode="lines+markers", name=name + (" (right)" if secondary else ""),
             line=dict(color=palette[i % len(palette)], width=2.5),
             marker=dict(size=6), connectgaps=False,
         ), secondary_y=secondary)
-    dark_chart_layout(fig, title=f"Selected metrics — FY {current_fy}")
+    dark_chart_layout(fig, title="Selected metrics — last 12 months")
+    fig.add_annotation(
+        x=1, y=-0.18, xref="paper", yref="paper", xanchor="right", showarrow=False,
+        text=f"{labels[-1]} is part-complete",
+        font=dict(size=10, color=config.COLORS["text_muted"]),
+    )
     fig.update_yaxes(gridcolor="#2a2a4a", color=config.COLORS["text"], secondary_y=False)
     if used_secondary:
         fig.update_yaxes(showgrid=False, color=config.COLORS["text"], secondary_y=True)
